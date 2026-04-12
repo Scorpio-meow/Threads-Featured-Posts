@@ -120,6 +120,7 @@
                     currentDelay = Math.max(LOAD_DELAY, currentDelay / 1.5);
                 }
                 console.log('[恢復] 速率限制解除,恢復載入,延遲: ' + (currentDelay / 1000) + ' 秒');
+                processSingleEmbed();
                 hideRateLimitBanner();
             });
         }, backoffTime);
@@ -377,6 +378,41 @@
             }
         } catch (e) { }
     }
+
+    function processSingleEmbed() {
+        if (processing || paused || rateLimitDetected) {
+            return;
+        }
+        if (currentIndex >= allBlockquotes.length) {
+            if (retryQueue.length > 0) {
+                setTimeout(processRetryQueue, 1000);
+                return;
+            }
+            if (stats.total > 0) {
+                logStats();
+            }
+            return;
+        }
+
+        var now = Date.now();
+        var timeSinceLastRequest = now - lastRequestTime;
+        var minDelay = typeof MIN_DELAY_BETWEEN_REQUESTS !== 'undefined' ? MIN_DELAY_BETWEEN_REQUESTS : 2000;
+        if (lastRequestTime > 0 && timeSinceLastRequest < minDelay) {
+            setTimeout(processSingleEmbed, withJitter(minDelay - timeSinceLastRequest));
+            return;
+        }
+
+        var blockquote = allBlockquotes[currentIndex];
+        if (!blockquote || blockquote.dataset.embedLoaded === 'true' || blockquote.dataset.embedLoading === 'true' || blockquote.dataset.embedFailed) {
+            currentIndex++;
+            processSingleEmbed();
+            return;
+        }
+
+        currentIndex++;
+        processBlockquoteRetry(blockquote);
+    }
+
     function processBlockquoteRetry(blockquote) {
         if (!blockquote || processing || paused || rateLimitDetected) return;
         processing = true;
@@ -441,7 +477,8 @@
                 removeLoadingIndicator(indicator);
                 processing = false;
                 if (currentIndex < allBlockquotes.length) {
-                    setTimeout(withJitter(currentDelay));
+                    processRetryQueue();
+                    setTimeout(processSingleEmbed, withJitter(currentDelay));
                 } else if (retryQueue.length > 0) {
                     setTimeout(processRetryQueue, 1000);
                 } else {
@@ -457,7 +494,8 @@
                 removeLoadingIndicator(indicator);
                 processing = false;
                 if (currentIndex < allBlockquotes.length) {
-                    setTimeout(withJitter(currentDelay));
+                    processRetryQueue();
+                    setTimeout(processSingleEmbed, withJitter(currentDelay));
                 } else if (retryQueue.length > 0) {
                     setTimeout(processRetryQueue, 1000);
                 } else {
@@ -830,6 +868,7 @@
                     if (allBlockquotes.length > 0) {
                         loadEmbedScript(function () {
                             try { currentIndex = 0; } catch (e) { }
+                            processSingleEmbed();
                         });
                     }
                 });
