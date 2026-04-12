@@ -25,6 +25,7 @@
     var totalPages = 1;
     var pageInfoEl = null;
     var lastRenderedPageSize = pageSize;
+    var renderPage = null;
     function readUrlState() {
         try {
             var params = new URLSearchParams(window.location.search);
@@ -943,7 +944,7 @@
                 }
             } catch (e) { }
         }
-        function renderPage(page, opts) {
+        renderPage = function (page, opts) {
             opts = opts || {};
             var push = true;
             if (typeof opts.push !== 'undefined') push = !!opts.push;
@@ -978,7 +979,7 @@
                     ensurePageSizeControls();
                 });
             });
-        }
+        };
         ensurePageSizeControls();
         updatePaginationControls();
         renderPage(currentPage, { push: false });
