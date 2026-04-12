@@ -17,17 +17,21 @@
     var retryQueue = [];
     var retryQueueTimer = null;
     var loadedCount = 0;
-    var pageSize = (typeof PAGE_SIZE !== 'undefined' ? PAGE_SIZE : 50);
+    var pageSizeOptions = (typeof PAGE_SIZE_OPTIONS !== 'undefined' && Array.isArray(PAGE_SIZE_OPTIONS) && PAGE_SIZE_OPTIONS.length > 0) ?
+        PAGE_SIZE_OPTIONS.slice() : [5, 10, 25, 50];
+    var defaultPageSize = (typeof PAGE_SIZE !== 'undefined' && pageSizeOptions.indexOf(PAGE_SIZE) !== -1) ? PAGE_SIZE : pageSizeOptions[0];
+    var pageSize = defaultPageSize;
     var currentPage = 1;
     var totalPages = 1;
     var pageInfoEl = null;
+    var lastRenderedPageSize = pageSize;
     function readUrlState() {
         try {
             var params = new URLSearchParams(window.location.search);
             var p = parseInt(params.get('page'), 10);
             var s = parseInt(params.get('page_size'), 10);
             if (Number.isFinite(p) && p > 0) currentPage = p;
-            if (Number.isFinite(s) && s > 0) pageSize = s;
+            pageSize = normalizePageSize(s, defaultPageSize);
         } catch (e) { }
     }
     function updateUrlParams(push) {
@@ -44,6 +48,84 @@
             var jitter = Math.floor(Math.random() * Math.max(0, Math.round(ms * 0.25)));
             return ms + jitter;
         } catch (e) { return ms; }
+    }
+    function isAllowedPageSize(size) {
+        return pageSizeOptions.indexOf(size) !== -1;
+    }
+    function normalizePageSize(size, fallback) {
+        var parsed = parseInt(size, 10);
+        if (Number.isFinite(parsed) && isAllowedPageSize(parsed)) return parsed;
+        return fallback;
+    }
+    function syncPageSizeControls() {
+        try {
+            var selects = document.querySelectorAll('.page-size-select');
+            if (!selects || selects.length === 0) return;
+            selects.forEach(function (select) {
+                if (!select) return;
+                var nextValue = String(pageSize);
+                if (select.value !== nextValue) {
+                    select.value = nextValue;
+                }
+            });
+        } catch (e) { }
+    }
+    function handlePageSizeChange(nextSize) {
+        var normalized = normalizePageSize(nextSize, pageSize);
+        if (normalized === pageSize) {
+            syncPageSizeControls();
+            return;
+        }
+        pageSize = normalized;
+        totalPages = Math.max(1, Math.ceil(posts.length / pageSize));
+        currentPage = 0;
+        syncPageSizeControls();
+        renderPage(1, { push: true });
+    }
+    function buildPageSizeControl() {
+        var control = document.createElement('label');
+        control.className = 'page-size-control';
+
+        var label = document.createElement('span');
+        label.className = 'page-size-control__label';
+        label.textContent = '每頁顯示';
+        control.appendChild(label);
+
+        var select = document.createElement('select');
+        select.className = 'page-size-select';
+        select.setAttribute('aria-label', '每頁顯示的貼文數');
+        pageSizeOptions.forEach(function (optionValue) {
+            var option = document.createElement('option');
+            option.value = String(optionValue);
+            option.textContent = String(optionValue);
+            if (optionValue === pageSize) {
+                option.selected = true;
+            }
+            select.appendChild(option);
+        });
+        select.value = String(pageSize);
+        select.addEventListener('change', function () {
+            handlePageSizeChange(parseInt(select.value, 10));
+        });
+        control.appendChild(select);
+
+        return control;
+    }
+    function ensurePageSizeControls() {
+        try {
+            var wrappers = document.querySelectorAll('.pagination-wrapper');
+            if (!wrappers || wrappers.length === 0) return;
+            wrappers.forEach(function (wrapper) {
+                if (!wrapper || wrapper.querySelector('.page-size-control')) return;
+                var control = buildPageSizeControl();
+                if (wrapper.classList.contains('pagination-wrapper--top')) {
+                    wrapper.insertBefore(control, wrapper.firstChild);
+                } else {
+                    wrapper.appendChild(control);
+                }
+            });
+            syncPageSizeControls();
+        } catch (e) { }
     }
     var stats = {
         total: 0,
@@ -339,9 +421,22 @@
             return r;
         } catch (e) { return 1; }
     }
+    function removeFromRetryQueue(blockquote) {
+        try {
+            if (!blockquote || retryQueue.length === 0) return;
+            retryQueue = retryQueue.filter(function (item) {
+                return !item || item.bq !== blockquote;
+            });
+            if (retryQueue.length === 0 && retryQueueTimer) {
+                clearInterval(retryQueueTimer);
+                retryQueueTimer = null;
+            }
+            blockquote.dataset.retryQueued = 'false';
+        } catch (e) { }
+    }
     function enqueueRetry(blockquote, backoffMs) {
         try {
-            if (!blockquote || blockquote.dataset.embedFailed) return;
+            if (!blockquote || blockquote.dataset.embedFailed || blockquote.dataset.embedLoaded === 'true') return;
             if (blockquote.dataset.retryQueued === 'true') return;
             var retryAt = Date.now() + (backoffMs || currentDelay);
             retryQueue.push({ bq: blockquote, retryAt: retryAt });
@@ -359,6 +454,11 @@
             for (var i = retryQueue.length - 1; i >= 0; i--) {
                 var item = retryQueue[i];
                 if (!item || !item.bq) { retryQueue.splice(i, 1); continue; }
+                if (item.bq.dataset && item.bq.dataset.embedLoaded === 'true') {
+                    retryQueue.splice(i, 1);
+                    item.bq.dataset.retryQueued = 'false';
+                    continue;
+                }
                 if (item.retryAt <= now) {
                     var bq = item.bq;
                     bq.dataset.retryQueued = 'false';
@@ -460,6 +560,7 @@
                     if (consecutiveErrors === 0 && currentDelay > LOAD_DELAY) {
                         currentDelay = Math.max(LOAD_DELAY, currentDelay / 1.2);
                     }
+                    removeFromRetryQueue(blockquote);
                     console.log('[重試成功] 重試載入成功 (耗時: ' + loadTime.toFixed(2) + '秒)');
                 } else {
                     stats.failed++;
@@ -735,6 +836,7 @@
             }
             scheduleIdle(step);
         }
+        ensurePageSizeControls();
         totalPages = Math.max(1, Math.ceil(posts.length / pageSize));
         function getPagePosts(page) {
             var p = Math.max(1, Math.min(totalPages, page));
@@ -773,6 +875,7 @@
         function updatePaginationControls() {
             var paginationEls = document.querySelectorAll('.pagination');
             if (!paginationEls || paginationEls.length === 0) return;
+            syncPageSizeControls();
             paginationEls.forEach(function (el) { el.innerHTML = ''; });
             var totalItems = Array.isArray(posts) ? posts.length : 0;
             if (totalItems === 0) {
@@ -845,8 +948,9 @@
             var push = true;
             if (typeof opts.push !== 'undefined') push = !!opts.push;
             try { page = Math.max(1, Math.min(totalPages, page)); } catch (e) { page = 1; }
-            if (page === currentPage && container.querySelectorAll('.post-item').length > 0) return;
+            if (page === currentPage && container.querySelectorAll('.post-item').length > 0 && lastRenderedPageSize === pageSize) return;
             currentPage = page;
+            lastRenderedPageSize = pageSize;
             clearPageState();
             container.innerHTML = '';
             if (typeof window.scrollTo === 'function') window.scrollTo(0, 0);
@@ -871,9 +975,11 @@
                             processSingleEmbed();
                         });
                     }
+                    ensurePageSizeControls();
                 });
             });
         }
+        ensurePageSizeControls();
         updatePaginationControls();
         renderPage(currentPage, { push: false });
         window.addEventListener('popstate', function () {
