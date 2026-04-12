@@ -992,22 +992,6 @@ button {
     justify-content: center;
 }
 
-body.threads-embed-disabled .post-item iframe {
-    display: none !important;
-}
-
-body.threads-embed-disabled .post-item:not(:has(iframe)) blockquote.text-post-media {
-    min-height: auto !important;
-    padding: 12px;
-    border-style: solid;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96));
-    background-size: auto;
-    animation: none;
-    display: block;
-    align-items: initial;
-    justify-content: initial;
-}
-
 .empty-state {
     position: relative;
     overflow: hidden;
