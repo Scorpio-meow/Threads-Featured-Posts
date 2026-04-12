@@ -45,6 +45,17 @@
             return ms + jitter;
         } catch (e) { return ms; }
     }
+    function shouldDisableThreadsEmbeds() {
+        try {
+            var ua = (navigator.userAgent || '').toLowerCase();
+            if (/android|iphone|ipad|ipod|mobile|mobi/.test(ua)) return true;
+            if (window.matchMedia) {
+                if (window.matchMedia('(hover: none) and (pointer: coarse)').matches) return true;
+                if (window.matchMedia('(max-width: 768px)').matches && (navigator.maxTouchPoints || 0) > 0) return true;
+            }
+        } catch (e) { }
+        return false;
+    }
     var stats = {
         total: 0,
         loaded: 0,
@@ -666,6 +677,11 @@
             if (!Array.isArray(posts)) return;
         } catch (e) { return; }
         var CHUNK_APPEND_SIZE = 20;
+        var mobileEmbedDisabled = shouldDisableThreadsEmbeds();
+        if (mobileEmbedDisabled && document.body) {
+            document.body.classList.add('threads-embed-disabled');
+            console.log('[資訊] 偵測到行動裝置，已停用 Threads iframe 嵌入，改用原始貼文內容。');
+        }
         readUrlState();
         function appendPostsInChunks(postsToAppend, done) {
             if (typeof postsToAppend === 'function') { done = postsToAppend; postsToAppend = posts; }
@@ -827,7 +843,7 @@
                     currentIndex = 0;
                     updatePaginationControls();
                     try { updateUrlParams(push); } catch (e) { }
-                    if (allBlockquotes.length > 0) {
+                    if (allBlockquotes.length > 0 && !mobileEmbedDisabled) {
                         loadEmbedScript(function () {
                             try { currentIndex = 0; } catch (e) { }
                         });
