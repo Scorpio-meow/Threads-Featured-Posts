@@ -14,16 +14,12 @@
     var rateLimitDetected = false;
     var consecutiveErrors = 0;
     var lastRequestTime = 0;
-    var retryQueue = [];
-    var retryQueueTimer = null;
-    var loadedCount = 0;
     var pageSizeOptions = (typeof PAGE_SIZE_OPTIONS !== 'undefined' && Array.isArray(PAGE_SIZE_OPTIONS) && PAGE_SIZE_OPTIONS.length > 0) ?
         PAGE_SIZE_OPTIONS.slice() : [5, 10, 25, 50];
     var defaultPageSize = (typeof PAGE_SIZE !== 'undefined' && pageSizeOptions.indexOf(PAGE_SIZE) !== -1) ? PAGE_SIZE : pageSizeOptions[0];
     var pageSize = defaultPageSize;
     var currentPage = 1;
     var totalPages = 1;
-    var pageInfoEl = null;
     var lastRenderedPageSize = pageSize;
     var renderPage = null;
     function readUrlState() {
@@ -323,63 +319,28 @@
             return;
         }
         embedScriptLoading = true;
-        var retryCount = 0;
-        function attemptLoad() {
-            var script = document.createElement('script');
-            script.async = true;
-            script.src = 'https://www.threads.com/embed.js';
-            script.onerror = function () {
-                retryCount++;
-                if (retryCount < MAX_RETRIES) {
-                    console.warn('[警告] Threads embed script 載入失敗,重試中... (' + retryCount + '/' + MAX_RETRIES + ')');
-                    setTimeout(function () {
-                        if (script.parentNode) {
-                            script.parentNode.removeChild(script);
-                        }
-                        attemptLoad();
-                    }, Math.pow(2, retryCount) * 1000);
-                } else {
-                    console.error('[錯誤] Threads embed script 載入失敗,已達最大重試次數');
-                    embedScriptLoading = false;
-                    stats.failed++;
-                }
-            };
-            script.onload = function () {
-                embedScriptLoaded = true;
-                embedScriptLoading = false;
-                console.log('[成功] Threads embed script 載入成功');
-                if (callback) callback();
-            };
-            document.body.appendChild(script);
-        }
-        attemptLoad();
+        var script = document.createElement('script');
+        script.async = true;
+        script.src = 'https://www.threads.com/embed.js';
+        script.onerror = function () {
+            console.error('[錯誤] Threads embed script 載入失敗');
+            embedScriptLoading = false;
+            stats.failed++;
+        };
+        script.onload = function () {
+            embedScriptLoaded = true;
+            embedScriptLoading = false;
+            console.log('[成功] Threads embed script 載入成功');
+            if (callback) callback();
+        };
+        document.body.appendChild(script);
     }
     function addLoadingIndicator(blockquote) {
         return null;
     }
     function removeLoadingIndicator(indicator) {
     }
-    function markBlockquoteFailed(blockquote, reason, hide) {
-        try {
-            blockquote.dataset.embedLoading = 'false';
-            blockquote.dataset.embedLoaded = 'false';
-            blockquote.dataset.embedFailed = reason || 'failed';
-            blockquote.dataset.retryQueued = 'false';
-            blockquote.dataset.inQueue = 'false';
-            stats.failed++;
-            consecutiveErrors++;
-            console.warn('[標記] 貼文標記為失敗: ' + reason);
-            var postItem = blockquote.closest('.post-item');
-            if (postItem) {
-                requestAnimationFrame(function () {
-                    if (postItem) {
-                        postItem.classList.add('error');
-                        if (hide) postItem.style.display = 'none';
-                    }
-                });
-            }
-        } catch (e) { }
-    }
+
 
     var rateLimitBannerInterval = null;
     function showRateLimitBanner(backoffTime) {
@@ -415,80 +376,12 @@
             if (banner && banner.parentNode) banner.parentNode.removeChild(banner);
         } catch (e) { }
     }
-    function incrementRetry(blockquote) {
-        try {
-            var r = parseInt(blockquote.dataset.retryCount || '0', 10) + 1;
-            blockquote.dataset.retryCount = '' + r;
-            return r;
-        } catch (e) { return 1; }
-    }
-    function removeFromRetryQueue(blockquote) {
-        try {
-            if (!blockquote || retryQueue.length === 0) return;
-            retryQueue = retryQueue.filter(function (item) {
-                return !item || item.bq !== blockquote;
-            });
-            if (retryQueue.length === 0 && retryQueueTimer) {
-                clearInterval(retryQueueTimer);
-                retryQueueTimer = null;
-            }
-            blockquote.dataset.retryQueued = 'false';
-        } catch (e) { }
-    }
-    function enqueueRetry(blockquote, backoffMs) {
-        try {
-            if (!blockquote || blockquote.dataset.embedFailed || blockquote.dataset.embedLoaded === 'true') return;
-            if (blockquote.dataset.retryQueued === 'true') return;
-            var retryAt = Date.now() + (backoffMs || currentDelay);
-            retryQueue.push({ bq: blockquote, retryAt: retryAt });
-            console.log('[Retry] 已加入重試佇列 (' + retryQueue.length + '), 預計於 ' + new Date(retryAt).toLocaleTimeString() + ' 重試');
-            blockquote.dataset.retryQueued = 'true';
-            if (!retryQueueTimer) {
-                retryQueueTimer = setInterval(processRetryQueue, 1000);
-            }
-        } catch (e) { }
-    }
-    function processRetryQueue() {
-        try {
-            if (processing || paused || rateLimitDetected) return;
-            var now = Date.now();
-            for (var i = retryQueue.length - 1; i >= 0; i--) {
-                var item = retryQueue[i];
-                if (!item || !item.bq) { retryQueue.splice(i, 1); continue; }
-                if (item.bq.dataset && item.bq.dataset.embedLoaded === 'true') {
-                    retryQueue.splice(i, 1);
-                    item.bq.dataset.retryQueued = 'false';
-                    continue;
-                }
-                if (item.retryAt <= now) {
-                    var bq = item.bq;
-                    bq.dataset.retryQueued = 'false';
-                    if (bq.dataset.embedFailed || bq.dataset.embedLoading === 'true') {
-                        retryQueue.splice(i, 1);
-                        continue;
-                    }
-                    retryQueue.splice(i, 1);
-                    console.log('[Retry] 正在重試載入 (佇列剩餘: ' + retryQueue.length + ')');
-                    processBlockquoteRetry(bq);
-                    break;
-                }
-            }
-            if (retryQueue.length === 0 && retryQueueTimer) {
-                clearInterval(retryQueueTimer);
-                retryQueueTimer = null;
-            }
-        } catch (e) { }
-    }
 
     function processSingleEmbed() {
         if (processing || paused || rateLimitDetected) {
             return;
         }
         if (currentIndex >= allBlockquotes.length) {
-            if (retryQueue.length > 0) {
-                setTimeout(processRetryQueue, 1000);
-                return;
-            }
             if (stats.total > 0) {
                 logStats();
             }
@@ -511,99 +404,6 @@
         }
 
         currentIndex++;
-        processBlockquoteRetry(blockquote);
-    }
-
-    function processBlockquoteRetry(blockquote) {
-        if (!blockquote || processing || paused || rateLimitDetected) return;
-        processing = true;
-        lastRequestTime = Date.now();
-        var indicator = addLoadingIndicator(blockquote);
-        stats.total++;
-        var itemStartTime = Date.now();
-        var processStart = performance.now();
-        var retryCount = parseInt(blockquote.dataset.retryCount || '0', 10);
-        console.log('[重試載入] 重試中 (第 ' + retryCount + '/' + MAX_RETRIES + ' 次)');
-        blockquote.dataset.embedLoading = 'true';
-        var container = document.getElementById('posts-container');
-        var postItem = blockquote.closest('.post-item');
-        requestAnimationFrame(function () {
-            if (container) container.classList.add('is-loading');
-            if (postItem) postItem.classList.add('current-loading');
-        });
-        scheduleIdle(function () {
-            try {
-                if (window.threadsEmbed && typeof window.threadsEmbed.process === 'function') {
-                    window.threadsEmbed.process();
-                }
-            } catch (e) {
-                console.warn('[Embed] process() failed:', e);
-            }
-        });
-        function restoreState() {
-            requestAnimationFrame(function () {
-                if (container) container.classList.remove('is-loading');
-                if (postItem) postItem.classList.remove('current-loading');
-            });
-        }
-        waitForIframeLoad(blockquote, IFRAME_TIMEOUT)
-            .then(function (success) {
-                var loadTime = (Date.now() - itemStartTime) / 1000;
-                stats.loadTimes.push(loadTime);
-                blockquote.dataset.embedLoading = 'false';
-                blockquote.dataset.embedLoaded = 'true';
-                blockquote.dataset.inQueue = 'false';
-                restoreState();
-                if (success) {
-                    stats.loaded++;
-                    loadedCount++;
-                    consecutiveErrors = Math.max(0, consecutiveErrors - 1);
-                    if (consecutiveErrors === 0 && currentDelay > LOAD_DELAY) {
-                        currentDelay = Math.max(LOAD_DELAY, currentDelay / 1.2);
-                    }
-                    removeFromRetryQueue(blockquote);
-                    console.log('[重試成功] 重試載入成功 (耗時: ' + loadTime.toFixed(2) + '秒)');
-                } else {
-                    stats.failed++;
-                    var retry = incrementRetry(blockquote);
-                    if (retry >= MAX_RETRIES) {
-                        markBlockquoteFailed(blockquote, 'max-retries', true);
-                    } else {
-                        console.log('[重試失敗] 將再次重試 (重試次數: ' + retry + '/' + MAX_RETRIES + ')');
-                        blockquote.dataset.embedLoading = 'false';
-                        blockquote.dataset.embedLoaded = 'false';
-                        blockquote.dataset.inQueue = 'false';
-                        enqueueRetry(blockquote, withJitter(currentDelay));
-                    }
-                }
-                removeLoadingIndicator(indicator);
-                processing = false;
-                if (currentIndex < allBlockquotes.length) {
-                    processRetryQueue();
-                    setTimeout(processSingleEmbed, withJitter(currentDelay));
-                } else if (retryQueue.length > 0) {
-                    setTimeout(processRetryQueue, 1000);
-                } else {
-                    logStats();
-                }
-            })
-            .catch(function (error) {
-                console.error('[重試錯誤] 處理錯誤:', error);
-                blockquote.dataset.embedLoading = 'false';
-                stats.failed++;
-                restoreState();
-                markBlockquoteFailed(blockquote, 'error', true);
-                removeLoadingIndicator(indicator);
-                processing = false;
-                if (currentIndex < allBlockquotes.length) {
-                    processRetryQueue();
-                    setTimeout(processSingleEmbed, withJitter(currentDelay));
-                } else if (retryQueue.length > 0) {
-                    setTimeout(processRetryQueue, 1000);
-                } else {
-                    logStats();
-                }
-            });
     }
     function scheduleIdle(fn) {
         if (window.requestIdleCallback) {
@@ -640,7 +440,7 @@
                         var parentNode = blockquote.parentNode;
                         if (!parentNode) { return; }
                         if (parentNode.querySelector('iframe')) return;
-                        if (rateLimitDetected || !document.body.contains(blockquote) || blockquote.dataset.embedFailed || blockquote.dataset.retryQueued === 'true') {
+                        if (rateLimitDetected || !document.body.contains(blockquote) || blockquote.dataset.embedFailed) {
                             console.warn('[早退] 早期超時或其他條件觸發，暫時放棄等待 iframe (尚未標記為失敗)');
                         } else {
                             console.warn('[早期警告] 尚未發現 iframe，繼續等待直到主超時 (' + (timeout || IFRAME_TIMEOUT) + 'ms)');
@@ -658,7 +458,7 @@
                 return;
             }
             try {
-                if (blockquote.dataset.embedFailed || blockquote.dataset.retryQueued === 'true' || !document.body.contains(blockquote) || rateLimitDetected) {
+                if (blockquote.dataset.embedFailed || !document.body.contains(blockquote) || rateLimitDetected) {
                     done(false);
                     return;
                 }
@@ -855,8 +655,6 @@
             rateLimitDetected = false;
             consecutiveErrors = 0;
             lastRequestTime = 0;
-            retryQueue = [];
-            if (retryQueueTimer) { clearInterval(retryQueueTimer); retryQueueTimer = null; }
             loadedCount = 0;
             stats = { total: 0, loaded: 0, failed: 0, rateLimitHits: 0, startTime: Date.now(), loadTimes: [] };
             try { hideRateLimitBanner(); } catch (e) { }
