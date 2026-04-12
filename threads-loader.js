@@ -720,10 +720,38 @@
             stats = { total: 0, loaded: 0, failed: 0, rateLimitHits: 0, startTime: Date.now(), loadTimes: [] };
             try { hideRateLimitBanner(); } catch (e) { }
         }
+        function renderEmptyState(target) {
+            if (!target) return;
+            var emptyState = document.createElement('section');
+            emptyState.className = 'empty-state';
+            emptyState.setAttribute('role', 'status');
+            emptyState.innerHTML =
+                '<p class="empty-state__eyebrow">目前沒有內容</p>' +
+                '<h2>Threads 精選貼文尚未載入</h2>' +
+                '<p>當貼文資料恢復後，這裡會自動轉為卡片式閱讀版面，並保留分頁與即時嵌入體驗。</p>' +
+                '<div class="empty-state__chips"><span>URL 分頁</span><span>即時嵌入</span><span>響應式版面</span></div>';
+            target.appendChild(emptyState);
+        }
         function updatePaginationControls() {
             var paginationEls = document.querySelectorAll('.pagination');
             if (!paginationEls || paginationEls.length === 0) return;
             paginationEls.forEach(function (el) { el.innerHTML = ''; });
+            var totalItems = Array.isArray(posts) ? posts.length : 0;
+            if (totalItems === 0) {
+                paginationEls.forEach(function (paginationEl) {
+                    var emptyLabel = document.createElement('span');
+                    emptyLabel.className = 'pagination-empty';
+                    emptyLabel.textContent = '目前沒有可瀏覽的貼文';
+                    paginationEl.appendChild(emptyLabel);
+                });
+                try {
+                    var emptyPageInfoEls = document.querySelectorAll('.page-info');
+                    if (emptyPageInfoEls && emptyPageInfoEls.length > 0) {
+                        emptyPageInfoEls.forEach(function (pi) { pi.textContent = '尚無精選貼文'; });
+                    }
+                } catch (e) { }
+                return;
+            }
             function navigateTo(pageNum, size) {
                 try {
                     var u = new URL(window.location.href);
@@ -770,7 +798,7 @@
             try {
                 var pageInfoEls = document.querySelectorAll('.page-info');
                 if (pageInfoEls && pageInfoEls.length > 0) {
-                    pageInfoEls.forEach(function (pi) { pi.textContent = '第 ' + currentPage + ' / ' + totalPages + ' 頁'; });
+                    pageInfoEls.forEach(function (pi) { pi.textContent = '第 ' + currentPage + ' / ' + totalPages + ' 頁 · 共 ' + totalItems + ' 則貼文'; });
                 }
             } catch (e) { }
         }
@@ -784,6 +812,12 @@
             clearPageState();
             container.innerHTML = '';
             if (typeof window.scrollTo === 'function') window.scrollTo(0, 0);
+            if (!posts || posts.length === 0) {
+                renderEmptyState(container);
+                updatePaginationControls();
+                try { updateUrlParams(push); } catch (e) { }
+                return;
+            }
             appendPostsInChunks(getPagePosts(currentPage), function () {
                 requestAnimationFrame(function () {
                     var blockquotes = container.querySelectorAll('blockquote.text-post-media');

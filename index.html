@@ -4,31 +4,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="探索 Threads 精選貼文，發現精彩內容">
-    <meta name="theme-color" content="#833ab4">
+    <meta name="description" content="以更精緻的版面瀏覽 Threads 精選貼文、快速分頁與即時嵌入內容。">
+    <meta name="theme-color" content="#f3f5f8">
     <title>Threads 精選貼文</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap"
+        rel="stylesheet">
     <link rel="icon" type="image/png" href="favicon.png">
     <link rel="stylesheet" href="styles.css">
     <script src="console-filter.js"></script>
 </head>
 
 <body>
-    <header class="page-header">
-        <h1>
-            <img src="favicon.png" alt="Threads Logo" draggable="false">
-            <span>Threads 精選貼文</span>
-        </h1>
-        <p>✨ 探索精彩內容，發現有趣的人事物</p>
-    </header>
-    <nav class="pagination-wrapper" aria-label="頂部分頁導航">
-        <div class="page-info" aria-live="polite"></div>
-        <div class="pagination" role="navigation" aria-label="分頁"></div>
-    </nav>
-    <main id="posts-container" role="feed" aria-busy="false"></main>
-    <nav class="pagination-wrapper" aria-label="底部分頁導航">
-        <div class="pagination" role="navigation" aria-label="分頁"></div>
-        <div class="page-info" aria-hidden="true"></div>
-    </nav>
+    <div class="page-shell">
+        <header class="page-header">
+            <div class="brand-lockup">
+                <span class="brand-mark" aria-hidden="true">
+                    <img src="favicon.png" alt="" draggable="false">
+                </span>
+                <div class="brand-copy">
+                    <p class="page-eyebrow">Threads Featured Posts</p>
+                    <h1>Threads 精選貼文</h1>
+                </div>
+            </div>
+            <p class="page-summary">在更乾淨的閱讀版面中瀏覽精選 Threads 內容，支援分頁、即時嵌入與載入狀態。</p>
+            <div class="hero-pills" aria-label="版面特色">
+                <span class="hero-pill">即時嵌入</span>
+                <span class="hero-pill">URL 分頁</span>
+                <span class="hero-pill">響應式版面</span>
+            </div>
+        </header>
+        <nav class="pagination-wrapper pagination-wrapper--top" aria-label="頂部分頁導航">
+            <div class="page-info" aria-live="polite"></div>
+            <div class="pagination" role="navigation" aria-label="分頁"></div>
+        </nav>
+        <main id="posts-container" data-posts-container role="feed" aria-busy="false" aria-live="polite" aria-label="Threads 精選貼文列表"></main>
+        <nav class="pagination-wrapper pagination-wrapper--bottom" aria-label="底部分頁導航">
+            <div class="pagination" role="navigation" aria-label="分頁"></div>
+            <div class="page-info" aria-hidden="true"></div>
+        </nav>
+    </div>
     <script src="config.js"></script>
     <script src="threads-loader.js"></script>
 </body>
