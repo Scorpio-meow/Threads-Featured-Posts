@@ -402,8 +402,46 @@
             processSingleEmbed();
             return;
         }
-
         currentIndex++;
+        processing = true;
+        lastRequestTime = Date.now();
+        try {
+            blockquote.dataset.embedLoading = 'true';
+        } catch (e) { }
+        var loadStart = Date.now();
+        try {
+            if (window.threadsEmbed && typeof window.threadsEmbed.process === 'function') {
+                try { window.threadsEmbed.process(); } catch (e) { /* ignore */ }
+            }
+        } catch (e) { }
+        waitForIframeLoad(blockquote, typeof IFRAME_TIMEOUT !== 'undefined' ? IFRAME_TIMEOUT : 20000).then(function (success) {
+            processing = false;
+            var elapsed = (Date.now() - loadStart) / 1000;
+            if (success) {
+                try {
+                    blockquote.dataset.embedLoaded = 'true';
+                    delete blockquote.dataset.embedLoading;
+                } catch (e) { }
+                stats.loaded++;
+                try { stats.loadTimes.push(elapsed); } catch (e) { }
+                consecutiveErrors = Math.max(0, consecutiveErrors - 1);
+            } else {
+                try { delete blockquote.dataset.embedLoading; } catch (e) { }
+                if (!blockquote.dataset.embedFailed) {
+                    markBlockquoteFailed(blockquote, 'timeout', false);
+                }
+                stats.failed++;
+            }
+            setTimeout(function () {
+                try { processSingleEmbed(); } catch (e) { }
+            }, withJitter(currentDelay));
+        }).catch(function () {
+            processing = false;
+            try { delete blockquote.dataset.embedLoading; } catch (e) { }
+            if (!blockquote.dataset.embedFailed) markBlockquoteFailed(blockquote, 'error', true);
+            stats.failed++;
+            setTimeout(function () { processSingleEmbed(); }, withJitter(currentDelay));
+        });
     }
     function scheduleIdle(fn) {
         if (window.requestIdleCallback) {
@@ -598,6 +636,25 @@
                 }
             }
         });
+    }
+    function markBlockquoteFailed(blockquote, reason, silent) {
+        try {
+            if (!blockquote) return;
+            blockquote.dataset.embedFailed = reason || 'unknown';
+            try { delete blockquote.dataset.embedLoading; } catch (e) { }
+            if (!silent) {
+                console.warn('[失敗] embed 標記失敗:', reason, blockquote);
+            }
+            var item = blockquote.closest && blockquote.closest('.post-item');
+            if (item) {
+                if (!item.querySelector('.post-item-fallback')) {
+                    var fallback = document.createElement('div');
+                    fallback.className = 'post-item-fallback';
+                    fallback.textContent = '貼文載入失敗 (' + (reason || 'unknown') + ')';
+                    item.appendChild(fallback);
+                }
+            }
+        } catch (e) { }
     }
     function init() {
         var container = document.getElementById('posts-container');
