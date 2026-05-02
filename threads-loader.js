@@ -82,12 +82,10 @@
     function buildPageSizeControl() {
         var control = document.createElement('label');
         control.className = 'page-size-control';
-
         var label = document.createElement('span');
         label.className = 'page-size-control__label';
         label.textContent = '每頁顯示';
         control.appendChild(label);
-
         var select = document.createElement('select');
         select.className = 'page-size-select';
         select.setAttribute('aria-label', '每頁顯示的貼文數');
@@ -105,7 +103,6 @@
             handlePageSizeChange(parseInt(select.value, 10));
         });
         control.appendChild(select);
-
         return control;
     }
     function ensurePageSizeControls() {
@@ -340,8 +337,6 @@
     }
     function removeLoadingIndicator(indicator) {
     }
-
-
     var rateLimitBannerInterval = null;
     function showRateLimitBanner(backoffTime) {
         try {
@@ -376,36 +371,6 @@
             if (banner && banner.parentNode) banner.parentNode.removeChild(banner);
         } catch (e) { }
     }
-    function markBlockquoteLoaded(blockquote, elapsed) {
-        try {
-            if (!blockquote) return;
-            blockquote.dataset.embedLoaded = 'true';
-            delete blockquote.dataset.embedLoading;
-        } catch (e) { }
-        stats.loaded++;
-        try {
-            if (typeof elapsed === 'number' && isFinite(elapsed)) {
-                stats.loadTimes.push(elapsed);
-            }
-        } catch (e) { }
-        consecutiveErrors = Math.max(0, consecutiveErrors - 1);
-    }
-    function findExistingIframeForBlockquote(blockquote) {
-        try {
-            if (!blockquote) return null;
-            var item = blockquote.closest ? blockquote.closest('.post-item') : null;
-            if (item) {
-                var itemIframe = item.querySelector('iframe');
-                if (itemIframe) return itemIframe;
-            }
-            var parentNode = blockquote.parentNode;
-            if (parentNode && parentNode.querySelector) {
-                var parentIframe = parentNode.querySelector('iframe');
-                if (parentIframe) return parentIframe;
-            }
-        } catch (e) { }
-        return null;
-    }
     function processSingleEmbed() {
         if (processing || paused || rateLimitDetected) {
             return;
@@ -416,7 +381,6 @@
             }
             return;
         }
-
         var now = Date.now();
         var timeSinceLastRequest = now - lastRequestTime;
         var minDelay = typeof MIN_DELAY_BETWEEN_REQUESTS !== 'undefined' ? MIN_DELAY_BETWEEN_REQUESTS : 2000;
@@ -424,7 +388,6 @@
             setTimeout(processSingleEmbed, withJitter(minDelay - timeSinceLastRequest));
             return;
         }
-
         var blockquote = allBlockquotes[currentIndex];
         if (!blockquote || blockquote.dataset.embedLoaded === 'true' || blockquote.dataset.embedLoading === 'true' || blockquote.dataset.embedFailed) {
             currentIndex++;
@@ -432,53 +395,6 @@
             return;
         }
         currentIndex++;
-        processing = true;
-        stats.total++;
-        lastRequestTime = Date.now();
-        try {
-            blockquote.dataset.embedLoading = 'true';
-        } catch (e) { }
-        var loadStart = Date.now();
-        var existingIframe = findExistingIframeForBlockquote(blockquote);
-        if (existingIframe) {
-            processing = false;
-            markBlockquoteLoaded(blockquote, (Date.now() - loadStart) / 1000);
-            setTimeout(function () {
-                try { processSingleEmbed(); } catch (e) { }
-            }, withJitter(currentDelay));
-            return;
-        }
-        try {
-            if (blockquote.classList.contains('text-post-media-pending')) {
-                blockquote.classList.remove('text-post-media-pending');
-                blockquote.classList.add('text-post-media');
-            }
-            if (window.threadsEmbed && typeof window.threadsEmbed.process === 'function') {
-                try { window.threadsEmbed.process(); } catch (e) { /* ignore */ }
-            }
-        } catch (e) { }
-        waitForIframeLoad(blockquote, typeof IFRAME_TIMEOUT !== 'undefined' ? IFRAME_TIMEOUT : 20000).then(function (success) {
-            processing = false;
-            var elapsed = (Date.now() - loadStart) / 1000;
-            if (success) {
-                markBlockquoteLoaded(blockquote, elapsed);
-            } else {
-                try { delete blockquote.dataset.embedLoading; } catch (e) { }
-                if (!blockquote.dataset.embedFailed) {
-                    markBlockquoteFailed(blockquote, 'timeout', false);
-                }
-                stats.failed++;
-            }
-            setTimeout(function () {
-                try { processSingleEmbed(); } catch (e) { }
-            }, withJitter(currentDelay));
-        }).catch(function () {
-            processing = false;
-            try { delete blockquote.dataset.embedLoading; } catch (e) { }
-            if (!blockquote.dataset.embedFailed) markBlockquoteFailed(blockquote, 'error', true);
-            stats.failed++;
-            setTimeout(function () { processSingleEmbed(); }, withJitter(currentDelay));
-        });
     }
     function scheduleIdle(fn) {
         if (window.requestIdleCallback) {
@@ -674,25 +590,6 @@
             }
         });
     }
-    function markBlockquoteFailed(blockquote, reason, silent) {
-        try {
-            if (!blockquote) return;
-            blockquote.dataset.embedFailed = reason || 'unknown';
-            try { delete blockquote.dataset.embedLoading; } catch (e) { }
-            if (!silent) {
-                console.warn('[失敗] embed 標記失敗:', reason, blockquote);
-            }
-            var item = blockquote.closest && blockquote.closest('.post-item');
-            if (item) {
-                if (!item.querySelector('.post-item-fallback')) {
-                    var fallback = document.createElement('div');
-                    fallback.className = 'post-item-fallback';
-                    fallback.textContent = '貼文載入失敗 (' + (reason || 'unknown') + ')';
-                    item.appendChild(fallback);
-                }
-            }
-        } catch (e) { }
-    }
     function init() {
         var container = document.getElementById('posts-container');
         if (!container) return;
@@ -714,10 +611,7 @@
                     if (deadline && typeof deadline.timeRemaining === 'function' && deadline.timeRemaining() < 8) break;
                     var item = document.createElement('div');
                     item.className = 'post-item';
-                    item.innerHTML = postsToAppend[idx++].replace(
-                        /class="text-post-media"/g,
-                        'class="text-post-media-pending"'
-                    );
+                    item.innerHTML = postsToAppend[idx++];
                     frag.appendChild(item);
                     count++;
                 }
@@ -858,17 +752,7 @@
             }
             appendPostsInChunks(getPagePosts(currentPage), function () {
                 requestAnimationFrame(function () {
-                    try {
-                        container.querySelectorAll('blockquote.text-post-media-registered').forEach(function (bq) {
-                            var item = bq.closest('.post-item');
-                            if (item && item.querySelector('iframe') && bq.dataset.embedLoaded !== 'true') {
-                                bq.dataset.embedLoaded = 'true';
-                            }
-                        });
-                    } catch (e) { }
-                    var blockquotes = container.querySelectorAll(
-                        'blockquote.text-post-media, blockquote.text-post-media-registered'
-                    );
+                    var blockquotes = container.querySelectorAll('blockquote.text-post-media');
                     allBlockquotes = Array.prototype.slice.call(blockquotes);
                     try { loadedCount = container.querySelectorAll('blockquote[data-embed-loaded="true"]').length || 0; } catch (e) { loadedCount = 0; }
                     totalPages = Math.max(1, Math.ceil(posts.length / pageSize));
