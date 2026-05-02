@@ -449,6 +449,10 @@
             return;
         }
         try {
+            if (blockquote.classList.contains('text-post-media-pending')) {
+                blockquote.classList.remove('text-post-media-pending');
+                blockquote.classList.add('text-post-media');
+            }
             if (window.threadsEmbed && typeof window.threadsEmbed.process === 'function') {
                 try { window.threadsEmbed.process(); } catch (e) { /* ignore */ }
             }
@@ -710,7 +714,10 @@
                     if (deadline && typeof deadline.timeRemaining === 'function' && deadline.timeRemaining() < 8) break;
                     var item = document.createElement('div');
                     item.className = 'post-item';
-                    item.innerHTML = postsToAppend[idx++];
+                    item.innerHTML = postsToAppend[idx++].replace(
+                        /class="text-post-media"/g,
+                        'class="text-post-media-pending"'
+                    );
                     frag.appendChild(item);
                     count++;
                 }
