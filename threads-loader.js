@@ -433,6 +433,7 @@
         }
         currentIndex++;
         processing = true;
+        stats.total++;
         lastRequestTime = Date.now();
         try {
             blockquote.dataset.embedLoading = 'true';
@@ -850,6 +851,14 @@
             }
             appendPostsInChunks(getPagePosts(currentPage), function () {
                 requestAnimationFrame(function () {
+                    try {
+                        container.querySelectorAll('blockquote.text-post-media-registered').forEach(function (bq) {
+                            var item = bq.closest('.post-item');
+                            if (item && item.querySelector('iframe') && bq.dataset.embedLoaded !== 'true') {
+                                bq.dataset.embedLoaded = 'true';
+                            }
+                        });
+                    } catch (e) { }
                     var blockquotes = container.querySelectorAll(
                         'blockquote.text-post-media, blockquote.text-post-media-registered'
                     );
