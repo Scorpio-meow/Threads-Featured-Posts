@@ -850,7 +850,9 @@
             }
             appendPostsInChunks(getPagePosts(currentPage), function () {
                 requestAnimationFrame(function () {
-                    var blockquotes = container.querySelectorAll('blockquote.text-post-media');
+                    var blockquotes = container.querySelectorAll(
+                        'blockquote.text-post-media, blockquote.text-post-media-registered'
+                    );
                     allBlockquotes = Array.prototype.slice.call(blockquotes);
                     try { loadedCount = container.querySelectorAll('blockquote[data-embed-loaded="true"]').length || 0; } catch (e) { loadedCount = 0; }
                     totalPages = Math.max(1, Math.ceil(posts.length / pageSize));
