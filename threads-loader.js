@@ -376,7 +376,36 @@
             if (banner && banner.parentNode) banner.parentNode.removeChild(banner);
         } catch (e) { }
     }
-
+    function markBlockquoteLoaded(blockquote, elapsed) {
+        try {
+            if (!blockquote) return;
+            blockquote.dataset.embedLoaded = 'true';
+            delete blockquote.dataset.embedLoading;
+        } catch (e) { }
+        stats.loaded++;
+        try {
+            if (typeof elapsed === 'number' && isFinite(elapsed)) {
+                stats.loadTimes.push(elapsed);
+            }
+        } catch (e) { }
+        consecutiveErrors = Math.max(0, consecutiveErrors - 1);
+    }
+    function findExistingIframeForBlockquote(blockquote) {
+        try {
+            if (!blockquote) return null;
+            var item = blockquote.closest ? blockquote.closest('.post-item') : null;
+            if (item) {
+                var itemIframe = item.querySelector('iframe');
+                if (itemIframe) return itemIframe;
+            }
+            var parentNode = blockquote.parentNode;
+            if (parentNode && parentNode.querySelector) {
+                var parentIframe = parentNode.querySelector('iframe');
+                if (parentIframe) return parentIframe;
+            }
+        } catch (e) { }
+        return null;
+    }
     function processSingleEmbed() {
         if (processing || paused || rateLimitDetected) {
             return;
@@ -409,6 +438,15 @@
             blockquote.dataset.embedLoading = 'true';
         } catch (e) { }
         var loadStart = Date.now();
+        var existingIframe = findExistingIframeForBlockquote(blockquote);
+        if (existingIframe) {
+            processing = false;
+            markBlockquoteLoaded(blockquote, (Date.now() - loadStart) / 1000);
+            setTimeout(function () {
+                try { processSingleEmbed(); } catch (e) { }
+            }, withJitter(currentDelay));
+            return;
+        }
         try {
             if (window.threadsEmbed && typeof window.threadsEmbed.process === 'function') {
                 try { window.threadsEmbed.process(); } catch (e) { /* ignore */ }
@@ -418,13 +456,7 @@
             processing = false;
             var elapsed = (Date.now() - loadStart) / 1000;
             if (success) {
-                try {
-                    blockquote.dataset.embedLoaded = 'true';
-                    delete blockquote.dataset.embedLoading;
-                } catch (e) { }
-                stats.loaded++;
-                try { stats.loadTimes.push(elapsed); } catch (e) { }
-                consecutiveErrors = Math.max(0, consecutiveErrors - 1);
+                markBlockquoteLoaded(blockquote, elapsed);
             } else {
                 try { delete blockquote.dataset.embedLoading; } catch (e) { }
                 if (!blockquote.dataset.embedFailed) {
