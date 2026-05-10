@@ -296,37 +296,15 @@
         };
     })();
     function loadEmbedScript(callback) {
-        if (embedScriptLoaded) {
-            if (callback) callback();
-            return;
-        }
-        if (embedScriptLoading) {
-            var checkInterval = setInterval(function () {
-                if (embedScriptLoaded) {
-                    clearInterval(checkInterval);
-                    if (callback) callback();
-                }
-            }, 100);
-            return;
-        }
-        if (window.threadsEmbed && typeof window.threadsEmbed.process === 'function') {
-            embedScriptLoaded = true;
-            console.log('[資訊] Threads embed script 已存在(快取)');
-            if (callback) callback();
-            return;
-        }
-        embedScriptLoading = true;
         var script = document.createElement('script');
         script.async = true;
         script.src = 'https://www.threads.com/embed.js';
         script.onerror = function () {
             console.error('[錯誤] Threads embed script 載入失敗');
-            embedScriptLoading = false;
             stats.failed++;
         };
         script.onload = function () {
             embedScriptLoaded = true;
-            embedScriptLoading = false;
             console.log('[成功] Threads embed script 載入成功');
             if (callback) callback();
         };
@@ -336,6 +314,43 @@
         return null;
     }
     function removeLoadingIndicator(indicator) {
+    }
+    function markBlockquoteFailed(blockquote, reason, skipRetry) {
+        if (!blockquote) return;
+        var failureReason = reason || 'unknown';
+        try {
+            blockquote.dataset.embedFailed = failureReason;
+            if (blockquote.dataset.embedLoading) {
+                delete blockquote.dataset.embedLoading;
+            }
+        } catch (e) { }
+        try {
+            var postItem = blockquote.closest('.post-item');
+            if (postItem) {
+                postItem.classList.remove('current-loading');
+            }
+        } catch (e) { }
+        try {
+            if (failureReason === 'xframe-deny' || failureReason === 'iframe-error' || failureReason === 'timeout' || failureReason === 'process-error') {
+                var fallbackUrl = blockquote.getAttribute('data-url') || '';
+                if (!fallbackUrl) {
+                    var fallbackLink = blockquote.querySelector('a[href]');
+                    if (fallbackLink) {
+                        fallbackUrl = fallbackLink.href || fallbackLink.getAttribute('href') || '';
+                    }
+                }
+                var postItemEl = blockquote.closest('.post-item');
+                if (fallbackUrl && postItemEl && !postItemEl.querySelector('.fallback-link')) {
+                    var link = document.createElement('a');
+                    link.href = fallbackUrl;
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                    link.className = 'fallback-link';
+                    link.textContent = '在 Threads 查看此貼文 →';
+                    postItemEl.appendChild(link);
+                }
+            }
+        } catch (e) { }
     }
     var rateLimitBannerInterval = null;
     function showRateLimitBanner(backoffTime) {
@@ -395,6 +410,103 @@
             return;
         }
         currentIndex++;
+        processing = true;
+        lastRequestTime = Date.now();
+        stats.total++;
+        var startTime = Date.now();
+        var attemptFinished = false;
+        var detachedQueueFragment = null;
+        blockquote.dataset.embedLoading = 'true';
+        var postItem = blockquote.closest('.post-item');
+        if (postItem) {
+            postItem.classList.add('current-loading');
+        }
+        function detachFuturePostItems() {
+            try {
+                if (!container || !postItem || !postItem.parentNode) return;
+                var postItems = Array.prototype.slice.call(container.children).filter(function (child) {
+                    return child && child.classList && child.classList.contains('post-item');
+                });
+                var currentPostIndex = -1;
+                for (var i = 0; i < postItems.length; i++) {
+                    if (postItems[i] === postItem) {
+                        currentPostIndex = i;
+                        break;
+                    }
+                }
+                if (currentPostIndex === -1 || currentPostIndex >= postItems.length - 1) return;
+                detachedQueueFragment = document.createDocumentFragment();
+                for (var j = currentPostIndex + 1; j < postItems.length; j++) {
+                    detachedQueueFragment.appendChild(postItems[j]);
+                }
+            } catch (e) { }
+        }
+        function restoreFuturePostItems() {
+            try {
+                if (detachedQueueFragment && detachedQueueFragment.childNodes.length > 0 && container) {
+                    container.appendChild(detachedQueueFragment);
+                }
+            } catch (e) { }
+            detachedQueueFragment = null;
+        }
+        function cleanupLoadingState() {
+            try {
+                if (postItem) {
+                    postItem.classList.remove('current-loading');
+                }
+                if (blockquote.dataset.embedLoading) {
+                    delete blockquote.dataset.embedLoading;
+                }
+            } catch (e) { }
+        }
+        function finishAttempt(success, reason) {
+            if (attemptFinished) return;
+            attemptFinished = true;
+            restoreFuturePostItems();
+            cleanupLoadingState();
+            if (success) {
+                blockquote.dataset.embedLoaded = 'true';
+                try { delete blockquote.dataset.embedFailed; } catch (e) { }
+                stats.loaded++;
+                consecutiveErrors = Math.max(0, consecutiveErrors - 1);
+                stats.loadTimes.push((Date.now() - startTime) / 1000);
+                console.log('[載入] embed 成功 (' + currentIndex + '/' + allBlockquotes.length + ')');
+            } else {
+                markBlockquoteFailed(blockquote, reason || 'timeout', true);
+                stats.failed++;
+            }
+            processing = false;
+            if (!paused && !rateLimitDetected) {
+                setTimeout(processSingleEmbed, withJitter(currentDelay));
+            }
+        }
+        detachFuturePostItems();
+        var script = document.createElement('script');
+        script.async = true;
+        script.src = 'https://www.threads.com/embed.js';
+        script.onload = function () {
+            try {
+                if (script.parentNode) script.parentNode.removeChild(script);
+            } catch (e) { }
+        };
+        script.onerror = function () {
+            try {
+                if (script.parentNode) script.parentNode.removeChild(script);
+            } catch (e) { }
+            console.warn('[錯誤] Threads embed script 重新插入失敗');
+            finishAttempt(false, 'process-error');
+        };
+        try {
+            waitForIframeLoad(blockquote, typeof IFRAME_TIMEOUT !== 'undefined' ? IFRAME_TIMEOUT : 30000)
+                .then(function (success) {
+                    finishAttempt(!!success, success ? null : 'timeout');
+                });
+            document.body.appendChild(script);
+        } catch (error) {
+            console.warn('[錯誤] Threads embed 初始化失敗:', error);
+            finishAttempt(false, 'process-error');
+            return;
+        }
     }
     function scheduleIdle(fn) {
         if (window.requestIdleCallback) {
@@ -760,10 +872,8 @@
                     updatePaginationControls();
                     try { updateUrlParams(push); } catch (e) { }
                     if (allBlockquotes.length > 0) {
-                        loadEmbedScript(function () {
-                            try { currentIndex = 0; } catch (e) { }
-                            processSingleEmbed();
-                        });
+                        try { currentIndex = 0; } catch (e) { }
+                        processSingleEmbed();
                     }
                     ensurePageSizeControls();
                 });
