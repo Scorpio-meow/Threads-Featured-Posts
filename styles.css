@@ -119,7 +119,7 @@ body {
 .post-item {
     position: relative;
     display: block;
-    max-width: 540px;
+    width: 658px;
     margin: 20px auto;
     border-radius: var(--radius-lg);
     background: var(--bg-secondary);
