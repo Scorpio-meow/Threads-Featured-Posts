@@ -809,11 +809,10 @@ button {
     width: min(100%, 820px);
     margin: 0 auto;
     padding: 16px 20px;
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: auto auto 1fr;
     align-items: center;
-    justify-content: space-between;
-    gap: 14px;
+    gap: 16px 12px;
     border-radius: 28px;
     background: rgba(255, 255, 255, 0.72);
     border: 1px solid rgba(15, 23, 42, 0.08);
@@ -823,10 +822,11 @@ button {
 }
 
 .pagination {
-    flex: 1 1 auto;
+    grid-column: 1 / span 3;
+    grid-row: 2;
     display: flex;
     flex-wrap: wrap;
-    justify-content: flex-end;
+    justify-content: center;
     align-items: center;
     gap: 8px;
     min-width: 0;
@@ -879,7 +879,9 @@ button {
 }
 
 .page-info {
-    flex: 0 0 auto;
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
     margin: 0;
     padding: 8px 14px;
     border-radius: 999px;
@@ -891,6 +893,8 @@ button {
 }
 
 .page-size-control {
+    grid-column: 1;
+    grid-row: 1;
     display: inline-flex;
     align-items: center;
     gap: 10px;
@@ -1209,16 +1213,18 @@ button {
     }
 
     .pagination-wrapper {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
         padding: 14px;
         border-radius: 24px;
-        flex-direction: column;
-        align-items: stretch;
     }
 
     .page-size-control {
         gap: 8px;
         padding: 8px 12px;
-        align-self: flex-start;
+        align-self: center;
     }
 
     .page-size-select {
@@ -1228,12 +1234,15 @@ button {
     }
 
     .page-info {
-        align-self: flex-start;
+        align-self: center;
         white-space: normal;
+        text-align: center;
     }
 
     .pagination {
-        justify-content: flex-start;
+        justify-content: center;
+        width: 100%;
+        padding: 0;
     }
 
     .pagination .page-btn {
@@ -1282,6 +1291,8 @@ button {
 }
 
 .random-control {
+    grid-column: 2;
+    grid-row: 1;
     display: inline-flex;
     align-items: center;
     gap: 8px;

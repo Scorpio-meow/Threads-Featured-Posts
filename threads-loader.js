@@ -142,11 +142,7 @@
             wrappers.forEach(function (wrapper) {
                 if (!wrapper || wrapper.querySelector('.page-size-control')) return;
                 var control = buildPageSizeControl();
-                if (wrapper.classList.contains('pagination-wrapper--top')) {
-                    wrapper.insertBefore(control, wrapper.firstChild);
-                } else {
-                    wrapper.appendChild(control);
-                }
+                wrapper.insertBefore(control, wrapper.firstChild);
             });
             syncPageSizeControls();
         } catch (e) { }
@@ -965,18 +961,10 @@
                     if (!wrapper || wrapper.querySelector('.random-control')) return;
                     var control = buildRandomControl();
                     var sizeControl = wrapper.querySelector('.page-size-control');
-                    if (wrapper.classList.contains('pagination-wrapper--top')) {
-                        if (sizeControl) {
-                            wrapper.insertBefore(control, sizeControl.nextSibling);
-                        } else {
-                            wrapper.insertBefore(control, wrapper.firstChild);
-                        }
+                    if (sizeControl) {
+                        wrapper.insertBefore(control, sizeControl.nextSibling);
                     } else {
-                        if (sizeControl) {
-                            wrapper.insertBefore(control, sizeControl);
-                        } else {
-                            wrapper.appendChild(control);
-                        }
+                        wrapper.insertBefore(control, wrapper.firstChild);
                     }
                 });
             } catch (e) { }
