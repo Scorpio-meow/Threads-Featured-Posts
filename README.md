@@ -6,6 +6,8 @@
 
 - **自動限流與退避策略 (Rate Limit Handling)**：全域攔截 HTTP 429 錯誤與 Threads 腳本錯誤，若觸發速率限制會自動呈現提示，暫停載入貼文，並透過動態計算的回避時間 (Backoff) 自動恢復。
 - **智慧分頁與效能優化 (Smart Pagination)**：支援 URL 狀態同步的分頁功能 (支援 5, 10, 25, 50 筆等自訂選項)。透過 `requestIdleCallback` 以分塊 (chunks) 方式渲染 DOM，避免阻塞主執行緒 (Main Thread) 導致畫面卡頓。
+- **隨機排序與種子洗牌 (Random Sorting & Seeded Shuffle)**：支援一鍵切換隨機排序與預設排序。在隨機排序模式下，使用基於 URL 參數的隨機排序種子 (Seed) 以確保分頁時的文章順序一致，並提供「重新洗牌」功能以重新整理隨機排序順序。
+- **PWA (Progressive Web App) 支援**：支援離線存取功能，利用 Service Worker 快取核心靜態資源（包括 HTML、CSS、JS、設定檔與圖示），並提供完整的 Manifest 設定檔，支援應用程式安裝與獨立視窗運行。
 - **高強度的 Iframe 監控**：使用 `MutationObserver` 嚴格監控由 `embed.js` 生成的 iframes，能自動捕捉 `X-Frame-Options` 阻擋或瀏覽器錯誤畫面，並執行優雅降級。
 - **自動過濾雜訊 (Console Noise Reduction)**：內掛 `console-filter.js`，自動遮蔽 Threads 官方腳本常產生的 `postMessage` 與惱人的跨域警告，維持開發者介面乾淨。
 - **現代化版面設計**：使用具質感的玻璃擬物 (Glassmorphism)、漸層背景與 CSS 動畫，具備完整的「骨架屏」(Shimmer/Skeleton) 載入狀態，完美相容各種裝置。
@@ -69,7 +71,7 @@ python -m http.server 3000
 
 **使用 Node.js (http-server)：**
 ```bash
-npx http-server -p 3000
+bunx http-server -p 3000
 ```
 
 完成後，開啟瀏覽器前往 [http://localhost:3000](http://localhost:3000) 即可瀏覽。
@@ -79,22 +81,33 @@ npx http-server -p 3000
 ### 目錄結構
 
 ```text
+├── assets/            # 靜態資源 (圖示、Favicon 等)
 ├── config.js          # 資料與環境設定 (貼文陣列、分頁常數)
 ├── console-filter.js  # Console 雜訊過濾器
-├── favicon.png        # 網站圖示
 ├── index.html         # 網頁主架構與 DOM 容器
+├── manifest.json      # PWA 應用程式設定檔
 ├── styles.css         # UI 樣式、CSS 變數與動畫設計
+├── sw.js              # Service Worker 腳本 (處理離線快取與資源管理)
 └── threads-loader.js  # 核心業務邏輯 (分頁、狀態管理、限流處理、動態加載)
 ```
 
+### 支援的 URL 參數
+
+本應用程式支援透過 URL 查詢參數直接控制頁面狀態，方便進行分享或記錄特定瀏覽狀態：
+
+- `page`：目前顯示的頁碼（例如：`?page=2`）。
+- `page_size`：每頁顯示的貼文數量（例如：`?page_size=10`），須為 `config.js` 中 `PAGE_SIZE_OPTIONS` 定義的數值。
+- `random`：隨機排序的種子值（通常為時間戳記，例如：`?random=1717750000000`）。當 URL 包含此參數時，系統會開啟隨機排序模式，並根據該種子值對貼文進行一致性的隨機排序；若無此參數則使用預設排序。
+
 ### 運作生命週期 (Request Lifecycle)
 
-1. 使用者載入 `index.html` 及其靜態資源。
+1. 使用者載入 `index.html` 及其靜態資源。若是重複造訪，Service Worker 將直接由 Cache Storage 快速載入快取的靜態資源，提供離線存取支援。
 2. 預先執行的 `config.js` 定義所有全域變數及 `posts` 資料。
-3. `threads-loader.js` 初始化，讀取 URL 參數決定目前的頁碼與分頁大小。
-4. 透過分塊方式 (Chunk appending) 快速將 HTML 內容推入 `#posts-container`，提供即時的骨架屏視覺。
-5. 非同步載入官方的 `https://www.threads.com/embed.js`。
-6. `threads-loader.js` 循序處理每一則貼文，監聽 iframe 建立狀況，並根據 `LOAD_DELAY` 動態調配載入速度以避免觸發 Threads API 封鎖。
+3. `threads-loader.js` 初始化，自 URL 參數讀取目前的頁碼 (`page`)、分頁大小 (`page_size`) 與隨機排序狀態 (`random` 參數)。
+4. 若啟用隨機排序，將使用種子隨機演算法 (Seeded Shuffle) 對 `posts` 陣列進行打亂，確保在相同隨機參數下，進行分頁切換時能維持一致的貼文順序。
+5. 透過分塊方式 (Chunk appending) 快速將 HTML 內容推入 `#posts-container`，提供即時的骨架屏視覺。
+6. 非同步載入官方的 `https://www.threads.com/embed.js`。
+7. `threads-loader.js` 循序處理每一則貼文，監聽 iframe 建立狀況，並根據 `LOAD_DELAY` 動態調配載入速度以避免觸發 Threads API 封鎖。
 
 ## 部署建議 (Deployment)
 

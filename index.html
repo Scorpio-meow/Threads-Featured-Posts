@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-TW">
 
 <head>
@@ -13,7 +13,10 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap"
         rel="stylesheet">
-    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="icon" type="image/x-icon" href="assets/icons/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-title" content="Threads 精選">
+    <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="styles.css">
     <script src="console-filter.js"></script>
 </head>
@@ -23,7 +26,7 @@
         <header class="page-header">
             <div class="brand-lockup">
                 <span class="brand-mark" aria-hidden="true">
-                    <img src="favicon.png" alt="" draggable="false">
+                    <img src="assets/icons/favicon-192x192.png" alt="" draggable="false">
                 </span>
                 <div class="brand-copy">
                     <p class="page-eyebrow">Threads Featured Posts</p>
@@ -44,6 +47,15 @@
     </div>
     <script src="config.js"></script>
     <script src="threads-loader.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then((reg) => console.log('[Service Worker] 註冊成功，Scope:', reg.scope))
+                    .catch((err) => console.error('[Service Worker] 註冊失敗:', err));
+            });
+        }
+    </script>
 </body>
 
 </html>
