@@ -23,6 +23,86 @@
     var isRandomMode = false;
     var randomSeed = null;
     var activePosts = [];
+    var searchQuery = '';
+    var selectedTag = '';
+    var normalizedPosts = [];
+    var activeTheme = 'light';
+    var activeLayout = 'list';
+    function normalizePost(post) {
+        if (post && typeof post === 'object') {
+            return {
+                embedCode: post.embedCode || '',
+                content: post.content || '',
+                author: post.author || '',
+                tags: Array.isArray(post.tags) ? post.tags : [],
+                postLink: post.postLink || ''
+            };
+        }
+        var temp = document.createElement('div');
+        temp.innerHTML = post;
+        var blockquote = temp.querySelector('blockquote');
+        var permalink = '';
+        var author = '';
+        var text = '';
+        var tags = [];
+        if (blockquote) {
+            permalink = blockquote.getAttribute('data-text-post-permalink') || '';
+            var link = blockquote.querySelector('a');
+            if (link) {
+                if (!permalink) permalink = link.getAttribute('href') || '';
+                text = link.textContent || '';
+            }
+            if (permalink) {
+                var match = permalink.match(/threads\.net\/@([^\/]+)|threads\.com\/@([^\/]+)/);
+                if (match) {
+                    author = '@' + (match[1] || match[2]);
+                }
+            }
+            if (text) {
+                var hashtagRegex = /#([a-zA-Z0-9_\u4e00-\u9fa5]+)/g;
+                var matchTag;
+                while ((matchTag = hashtagRegex.exec(text)) !== null) {
+                    tags.push(matchTag[1]);
+                }
+            }
+        }
+        return {
+            embedCode: post || '',
+            content: text || (blockquote ? blockquote.textContent : ''),
+            author: author || 'unknown',
+            tags: tags,
+            postLink: permalink
+        };
+    }
+    function applyFiltersAndSorting() {
+        var query = searchQuery.trim().toLowerCase();
+        var filtered = normalizedPosts.filter(function (p) {
+            var matchSearch = true;
+            if (query) {
+                var inContent = p.content.toLowerCase().indexOf(query) !== -1;
+                var inAuthor = p.author.toLowerCase().indexOf(query) !== -1;
+                var inTags = p.tags.some(function (t) { return t.toLowerCase().indexOf(query) !== -1; });
+                matchSearch = inContent || inAuthor || inTags;
+            }
+            var matchTag = true;
+            if (selectedTag) {
+                matchTag = p.tags.some(function (t) { return t.toLowerCase() === selectedTag.toLowerCase(); });
+            }
+            return matchSearch && matchTag;
+        });
+        if (isRandomMode && randomSeed) {
+            activePosts = shuffleWithSeed(filtered, randomSeed);
+        } else {
+            activePosts = filtered;
+        }
+        totalPages = Math.max(1, Math.ceil(activePosts.length / pageSize));
+        if (currentPage > totalPages) {
+            currentPage = totalPages;
+        }
+        if (currentPage < 1) {
+            currentPage = 1;
+        }
+    }
     function seededRandom(seed) {
         var x = Math.sin(seed) * 10000;
         return x - Math.floor(x);
@@ -45,6 +125,8 @@
             var p = parseInt(params.get('page'), 10);
             var s = parseInt(params.get('page_size'), 10);
             var r = params.get('random');
+            var q = params.get('search');
+            var t = params.get('tag');
             if (Number.isFinite(p) && p > 0) currentPage = p;
             pageSize = normalizePageSize(s, defaultPageSize);
             if (r) {
@@ -54,6 +136,8 @@
                 isRandomMode = false;
                 randomSeed = null;
             }
+            searchQuery = q || '';
+            selectedTag = t || '';
         } catch (e) { }
     }
     function updateUrlParams(push) {
@@ -65,6 +149,16 @@
                 u.searchParams.set('random', randomSeed);
             } else {
                 u.searchParams.delete('random');
+            }
+            if (searchQuery) {
+                u.searchParams.set('search', searchQuery);
+            } else {
+                u.searchParams.delete('search');
+            }
+            if (selectedTag) {
+                u.searchParams.set('tag', selectedTag);
+            } else {
+                u.searchParams.delete('tag');
             }
             if (push) window.history.pushState({}, '', u);
             else window.history.replaceState({}, '', u);
@@ -736,11 +830,187 @@
         } catch (e) { return; }
         var CHUNK_APPEND_SIZE = 20;
         readUrlState();
-        if (isRandomMode && randomSeed) {
-            activePosts = shuffleWithSeed(posts, randomSeed);
-        } else {
-            activePosts = posts.slice();
+        normalizedPosts = posts.map(normalizePost);
+        var themeToggleBtn = document.getElementById('theme-toggle');
+        var savedTheme = localStorage.getItem('theme');
+        if (savedTheme) {
+            activeTheme = savedTheme;
+        } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            activeTheme = 'dark';
         }
+        function applyTheme(theme) {
+            activeTheme = theme;
+            if (theme === 'dark') {
+                document.documentElement.classList.add('dark-theme');
+                document.documentElement.classList.remove('light-theme');
+            } else {
+                document.documentElement.classList.add('light-theme');
+                document.documentElement.classList.remove('dark-theme');
+            }
+            localStorage.setItem('theme', theme);
+        }
+        applyTheme(activeTheme);
+        if (themeToggleBtn) {
+            themeToggleBtn.addEventListener('click', function () {
+                applyTheme(activeTheme === 'dark' ? 'light' : 'dark');
+            });
+        }
+        var layoutToggleBtn = document.getElementById('layout-toggle');
+        var savedLayout = localStorage.getItem('layout') || 'list';
+        function applyLayout(layout) {
+            activeLayout = layout;
+            var postsContainer = document.getElementById('posts-container');
+            if (postsContainer) {
+                if (layout === 'grid') {
+                    postsContainer.classList.add('grid-mode');
+                    document.documentElement.classList.add('layout-grid');
+                } else {
+                    postsContainer.classList.remove('grid-mode');
+                    document.documentElement.classList.remove('layout-grid');
+                }
+            }
+            localStorage.setItem('layout', layout);
+        }
+        applyLayout(savedLayout);
+        if (layoutToggleBtn) {
+            layoutToggleBtn.addEventListener('click', function () {
+                applyLayout(activeLayout === 'grid' ? 'list' : 'grid');
+            });
+        }
+        var searchInput = document.getElementById('search-input');
+        var searchSubmitBtn = document.getElementById('search-submit');
+        function executeSearch() {
+            if (!searchInput) return;
+            var nextQuery = searchInput.value.trim();
+            if (searchQuery === nextQuery) return;
+            try {
+                var u = new URL(window.location.href);
+                u.searchParams.set('page', 1);
+                if (nextQuery) {
+                    u.searchParams.set('search', nextQuery);
+                } else {
+                    u.searchParams.delete('search');
+                }
+                window.location.href = u.toString();
+            } catch (e) {
+                var search = '?page=1&page_size=' + pageSize;
+                if (isRandomMode && randomSeed) {
+                    search += '&random=' + randomSeed;
+                }
+                if (nextQuery) {
+                    search += '&search=' + encodeURIComponent(nextQuery);
+                }
+                if (selectedTag) {
+                    search += '&tag=' + encodeURIComponent(selectedTag);
+                }
+                window.location.search = search;
+            }
+        }
+        if (searchInput) {
+            searchInput.value = searchQuery;
+            searchInput.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') {
+                    executeSearch();
+                }
+            });
+            searchInput.addEventListener('input', function () {
+                if (searchInput.value === '') {
+                    executeSearch();
+                }
+            });
+        }
+        if (searchSubmitBtn) {
+            searchSubmitBtn.addEventListener('click', executeSearch);
+        }
+        function renderTagsContainer() {
+            var tagsContainer = document.getElementById('tags-container');
+            if (!tagsContainer) return;
+            tagsContainer.innerHTML = '';
+            var tagCounts = {};
+            normalizedPosts.forEach(function (p) {
+                p.tags.forEach(function (t) {
+                    var normalizedT = t.toLowerCase();
+                    tagCounts[normalizedT] = (tagCounts[normalizedT] || 0) + 1;
+                });
+            });
+            var sortedTags = Object.keys(tagCounts).sort(function (a, b) {
+                return tagCounts[b] - tagCounts[a];
+            });
+            var bar = document.getElementById('tags-filter-bar');
+            if (sortedTags.length === 0) {
+                if (bar) bar.style.display = 'none';
+                return;
+            } else {
+                if (bar) bar.style.display = 'block';
+            }
+            var allPill = document.createElement('button');
+            allPill.className = 'tag-pill' + (!selectedTag ? ' active' : '');
+            allPill.textContent = '全部貼文';
+            allPill.addEventListener('click', function () {
+                if (!selectedTag) return;
+                try {
+                    var u = new URL(window.location.href);
+                    u.searchParams.set('page', 1);
+                    u.searchParams.delete('tag');
+                    window.location.href = u.toString();
+                } catch (e) {
+                    var search = '?page=1&page_size=' + pageSize;
+                    if (isRandomMode && randomSeed) search += '&random=' + randomSeed;
+                    if (searchQuery) search += '&search=' + encodeURIComponent(searchQuery);
+                    window.location.search = search;
+                }
+            });
+            tagsContainer.appendChild(allPill);
+            sortedTags.forEach(function (tag) {
+                var originalTag = tag;
+                for (var i = 0; i < normalizedPosts.length; i++) {
+                    var found = normalizedPosts[i].tags.find(function (t) { return t.toLowerCase() === tag; });
+                    if (found) {
+                        originalTag = found;
+                        break;
+                    }
+                }
+                var pill = document.createElement('button');
+                pill.className = 'tag-pill' + (selectedTag.toLowerCase() === tag ? ' active' : '');
+                pill.textContent = '#' + originalTag + ' (' + tagCounts[tag] + ')';
+                pill.dataset.tag = tag;
+                pill.addEventListener('click', function () {
+                    var nextTag = (selectedTag.toLowerCase() === tag) ? '' : originalTag;
+                    try {
+                        var u = new URL(window.location.href);
+                        u.searchParams.set('page', 1);
+                        if (nextTag) {
+                            u.searchParams.set('tag', nextTag);
+                        } else {
+                            u.searchParams.delete('tag');
+                        }
+                        window.location.href = u.toString();
+                    } catch (e) {
+                        var search = '?page=1&page_size=' + pageSize;
+                        if (isRandomMode && randomSeed) search += '&random=' + randomSeed;
+                        if (searchQuery) search += '&search=' + encodeURIComponent(searchQuery);
+                        if (nextTag) search += '&tag=' + encodeURIComponent(nextTag);
+                        window.location.search = search;
+                    }
+                });
+                tagsContainer.appendChild(pill);
+            });
+        }
+        function updateTagPillActiveState() {
+            var pills = document.querySelectorAll('.tag-pill');
+            pills.forEach(function (pill) {
+                if (pill.textContent === '全部貼文') {
+                    if (!selectedTag) pill.classList.add('active');
+                    else pill.classList.remove('active');
+                } else if (selectedTag && pill.dataset.tag === selectedTag.toLowerCase()) {
+                    pill.classList.add('active');
+                } else {
+                    pill.classList.remove('active');
+                }
+            });
+        }
+        renderTagsContainer();
+        applyFiltersAndSorting();
         function appendPostsInChunks(postsToAppend, done) {
             if (typeof postsToAppend === 'function') { done = postsToAppend; postsToAppend = activePosts; }
             if (!postsToAppend || postsToAppend.length === 0) return done();
@@ -754,7 +1024,16 @@
                     if (deadline && typeof deadline.timeRemaining === 'function' && deadline.timeRemaining() < 8) break;
                     var item = document.createElement('div');
                     item.className = 'post-item';
-                    item.innerHTML = postsToAppend[idx++];
+                    var postObj = postsToAppend[idx++];
+                    var embedCode = typeof postObj === 'string' ? postObj : postObj.embedCode;
+                    var embedWithTheme = embedCode;
+                    var targetTheme = activeTheme === 'dark' ? 'dark' : 'light';
+                    if (embedWithTheme.indexOf('data-theme=') !== -1) {
+                        embedWithTheme = embedWithTheme.replace(/data-theme="[^"]*"/, 'data-theme="' + targetTheme + '"');
+                    } else {
+                        embedWithTheme = embedWithTheme.replace('<blockquote ', '<blockquote data-theme="' + targetTheme + '" ');
+                    }
+                    item.innerHTML = embedWithTheme;
                     frag.appendChild(item);
                     count++;
                 }
@@ -837,12 +1116,18 @@
                     } else {
                         u.searchParams.delete('random');
                     }
+                    if (searchQuery) u.searchParams.set('search', searchQuery);
+                    else u.searchParams.delete('search');
+                    if (selectedTag) u.searchParams.set('tag', selectedTag);
+                    else u.searchParams.delete('tag');
                     window.location.href = u.toString();
                 } catch (e) {
                     var search = '?page=' + pageNum + '&page_size=' + (typeof size !== 'undefined' ? size : pageSize);
                     if (isRandomMode && randomSeed) {
                         search += '&random=' + randomSeed;
                     }
+                    if (searchQuery) search += '&search=' + encodeURIComponent(searchQuery);
+                    if (selectedTag) search += '&tag=' + encodeURIComponent(selectedTag);
                     window.location.search = search;
                 }
             }
@@ -974,7 +1259,7 @@
             var push = true;
             if (typeof opts.push !== 'undefined') push = !!opts.push;
             try { page = Math.max(1, Math.min(totalPages, page)); } catch (e) { page = 1; }
-            if (page === currentPage && container.querySelectorAll('.post-item').length > 0 && lastRenderedPageSize === pageSize) return;
+            if (!opts.force && page === currentPage && container.querySelectorAll('.post-item').length > 0 && lastRenderedPageSize === pageSize) return;
             currentPage = page;
             lastRenderedPageSize = pageSize;
             clearPageState();
@@ -1011,9 +1296,13 @@
         window.addEventListener('popstate', function () {
             try {
                 readUrlState();
+                applyFiltersAndSorting();
                 totalPages = Math.max(1, Math.ceil(activePosts.length / pageSize));
                 currentPage = Math.max(1, Math.min(totalPages, currentPage));
                 renderPage(currentPage, { push: false });
+                renderTagsContainer();
+                var searchInput = document.getElementById('search-input');
+                if (searchInput) searchInput.value = searchQuery;
             } catch (e) { }
         });
     }
