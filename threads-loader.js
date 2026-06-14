@@ -4,8 +4,6 @@
     } else {
         init();
     }
-    var embedScriptLoaded = false;
-    var embedScriptLoading = false;
     var allBlockquotes = [];
     var currentIndex = 0;
     var processing = false;
@@ -22,13 +20,40 @@
     var totalPages = 1;
     var lastRenderedPageSize = pageSize;
     var renderPage = null;
+    var isRandomMode = false;
+    var randomSeed = null;
+    var activePosts = [];
+    function seededRandom(seed) {
+        var x = Math.sin(seed) * 10000;
+        return x - Math.floor(x);
+    }
+    function shuffleWithSeed(array, seed) {
+        var m = array.length, t, i;
+        var copy = array.slice();
+        while (m) {
+            seed = (seed * 9301 + 49297) % 233280;
+            i = Math.floor((seed / 233280) * m--);
+            t = copy[m];
+            copy[m] = copy[i];
+            copy[i] = t;
+        }
+        return copy;
+    }
     function readUrlState() {
         try {
             var params = new URLSearchParams(window.location.search);
             var p = parseInt(params.get('page'), 10);
             var s = parseInt(params.get('page_size'), 10);
+            var r = params.get('random');
             if (Number.isFinite(p) && p > 0) currentPage = p;
             pageSize = normalizePageSize(s, defaultPageSize);
+            if (r) {
+                isRandomMode = true;
+                randomSeed = parseInt(r, 10) || Date.now();
+            } else {
+                isRandomMode = false;
+                randomSeed = null;
+            }
         } catch (e) { }
     }
     function updateUrlParams(push) {
@@ -36,6 +61,11 @@
             var u = new URL(window.location.href);
             u.searchParams.set('page', currentPage);
             u.searchParams.set('page_size', pageSize);
+            if (isRandomMode && randomSeed) {
+                u.searchParams.set('random', randomSeed);
+            } else {
+                u.searchParams.delete('random');
+            }
             if (push) window.history.pushState({}, '', u);
             else window.history.replaceState({}, '', u);
         } catch (e) { }
@@ -74,7 +104,7 @@
             return;
         }
         pageSize = normalized;
-        totalPages = Math.max(1, Math.ceil(posts.length / pageSize));
+        totalPages = Math.max(1, Math.ceil(activePosts.length / pageSize));
         currentPage = 0;
         syncPageSizeControls();
         renderPage(1, { push: true });
@@ -112,11 +142,7 @@
             wrappers.forEach(function (wrapper) {
                 if (!wrapper || wrapper.querySelector('.page-size-control')) return;
                 var control = buildPageSizeControl();
-                if (wrapper.classList.contains('pagination-wrapper--top')) {
-                    wrapper.insertBefore(control, wrapper.firstChild);
-                } else {
-                    wrapper.appendChild(control);
-                }
+                wrapper.insertBefore(control, wrapper.firstChild);
             });
             syncPageSizeControls();
         } catch (e) { }
@@ -710,8 +736,13 @@
         } catch (e) { return; }
         var CHUNK_APPEND_SIZE = 20;
         readUrlState();
+        if (isRandomMode && randomSeed) {
+            activePosts = shuffleWithSeed(posts, randomSeed);
+        } else {
+            activePosts = posts.slice();
+        }
         function appendPostsInChunks(postsToAppend, done) {
-            if (typeof postsToAppend === 'function') { done = postsToAppend; postsToAppend = posts; }
+            if (typeof postsToAppend === 'function') { done = postsToAppend; postsToAppend = activePosts; }
             if (!postsToAppend || postsToAppend.length === 0) return done();
             var idx = 0;
             var batchSize = CHUNK_APPEND_SIZE;
@@ -741,12 +772,13 @@
             scheduleIdle(step);
         }
         ensurePageSizeControls();
-        totalPages = Math.max(1, Math.ceil(posts.length / pageSize));
+        ensureRandomControls();
+        totalPages = Math.max(1, Math.ceil(activePosts.length / pageSize));
         function getPagePosts(page) {
             var p = Math.max(1, Math.min(totalPages, page));
             var start = (p - 1) * pageSize;
-            var end = Math.min(start + pageSize, posts.length);
-            return posts.slice(start, end);
+            var end = Math.min(start + pageSize, activePosts.length);
+            return activePosts.slice(start, end);
         }
         function parseIntSafe(v, fallback) {
             var n = parseInt(v, 10);
@@ -779,7 +811,7 @@
             if (!paginationEls || paginationEls.length === 0) return;
             syncPageSizeControls();
             paginationEls.forEach(function (el) { el.innerHTML = ''; });
-            var totalItems = Array.isArray(posts) ? posts.length : 0;
+            var totalItems = Array.isArray(activePosts) ? activePosts.length : 0;
             if (totalItems === 0) {
                 paginationEls.forEach(function (paginationEl) {
                     var emptyLabel = document.createElement('span');
@@ -800,9 +832,18 @@
                     var u = new URL(window.location.href);
                     u.searchParams.set('page', pageNum);
                     u.searchParams.set('page_size', typeof size !== 'undefined' ? size : pageSize);
+                    if (isRandomMode && randomSeed) {
+                        u.searchParams.set('random', randomSeed);
+                    } else {
+                        u.searchParams.delete('random');
+                    }
                     window.location.href = u.toString();
                 } catch (e) {
-                    window.location.search = '?page=' + pageNum + '&page_size=' + (typeof size !== 'undefined' ? size : pageSize);
+                    var search = '?page=' + pageNum + '&page_size=' + (typeof size !== 'undefined' ? size : pageSize);
+                    if (isRandomMode && randomSeed) {
+                        search += '&random=' + randomSeed;
+                    }
+                    window.location.search = search;
                 }
             }
             function addBtnTo(parentEl, label, page, disabled, active) {
@@ -845,6 +886,89 @@
                 }
             } catch (e) { }
         }
+        function buildRandomControl() {
+            var control = document.createElement('div');
+            control.className = 'random-control';
+            var randomBtn = document.createElement('button');
+            randomBtn.className = 'random-btn' + (isRandomMode ? ' active' : '');
+            randomBtn.setAttribute('aria-label', isRandomMode ? '切換為預設排序' : '切換為隨機排序');
+            var btnIcon = document.createElement('span');
+            btnIcon.className = 'random-btn__icon';
+            btnIcon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: block;"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>';
+            btnIcon.style.display = 'inline-flex';
+            btnIcon.style.alignItems = 'center';
+            btnIcon.style.justifyContent = 'center';
+            randomBtn.appendChild(btnIcon);
+            var btnText = document.createElement('span');
+            btnText.className = 'random-btn__text';
+            btnText.textContent = isRandomMode ? '隨機排序中' : '隨機排序';
+            randomBtn.appendChild(btnText);
+            randomBtn.addEventListener('click', function () {
+                if (isRandomMode) {
+                    try {
+                        var u = new URL(window.location.href);
+                        u.searchParams.set('page', 1);
+                        u.searchParams.delete('random');
+                        window.location.href = u.toString();
+                    } catch (e) {
+                        window.location.search = '?page=1&page_size=' + pageSize;
+                    }
+                } else {
+                    var newSeed = Date.now();
+                    try {
+                        var u = new URL(window.location.href);
+                        u.searchParams.set('page', 1);
+                        u.searchParams.set('random', newSeed);
+                        window.location.href = u.toString();
+                    } catch (e) {
+                        window.location.search = '?page=1&page_size=' + pageSize + '&random=' + newSeed;
+                    }
+                }
+            });
+            control.appendChild(randomBtn);
+            if (isRandomMode) {
+                var shuffleBtn = document.createElement('button');
+                shuffleBtn.className = 'shuffle-btn';
+                shuffleBtn.setAttribute('aria-label', '重新洗牌貼文');
+                shuffleBtn.title = '重新洗牌';
+                var shuffleIcon = document.createElement('span');
+                shuffleIcon.className = 'shuffle-btn__icon';
+                shuffleIcon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: block;"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>';
+                shuffleIcon.style.display = 'inline-flex';
+                shuffleIcon.style.alignItems = 'center';
+                shuffleIcon.style.justifyContent = 'center';
+                shuffleBtn.appendChild(shuffleIcon);
+                shuffleBtn.addEventListener('click', function () {
+                    var newSeed = Date.now();
+                    try {
+                        var u = new URL(window.location.href);
+                        u.searchParams.set('page', 1);
+                        u.searchParams.set('random', newSeed);
+                        window.location.href = u.toString();
+                    } catch (e) {
+                        window.location.search = '?page=1&page_size=' + pageSize + '&random=' + newSeed;
+                    }
+                });
+                control.appendChild(shuffleBtn);
+            }
+            return control;
+        }
+        function ensureRandomControls() {
+            try {
+                var wrappers = document.querySelectorAll('.pagination-wrapper');
+                if (!wrappers || wrappers.length === 0) return;
+                wrappers.forEach(function (wrapper) {
+                    if (!wrapper || wrapper.querySelector('.random-control')) return;
+                    var control = buildRandomControl();
+                    var sizeControl = wrapper.querySelector('.page-size-control');
+                    if (sizeControl) {
+                        wrapper.insertBefore(control, sizeControl.nextSibling);
+                    } else {
+                        wrapper.insertBefore(control, wrapper.firstChild);
+                    }
+                });
+            } catch (e) { }
+        }
         renderPage = function (page, opts) {
             opts = opts || {};
             var push = true;
@@ -856,7 +980,7 @@
             clearPageState();
             container.innerHTML = '';
             if (typeof window.scrollTo === 'function') window.scrollTo(0, 0);
-            if (!posts || posts.length === 0) {
+            if (!activePosts || activePosts.length === 0) {
                 renderEmptyState(container);
                 updatePaginationControls();
                 try { updateUrlParams(push); } catch (e) { }
@@ -867,7 +991,7 @@
                     var blockquotes = container.querySelectorAll('blockquote.text-post-media');
                     allBlockquotes = Array.prototype.slice.call(blockquotes);
                     try { loadedCount = container.querySelectorAll('blockquote[data-embed-loaded="true"]').length || 0; } catch (e) { loadedCount = 0; }
-                    totalPages = Math.max(1, Math.ceil(posts.length / pageSize));
+                    totalPages = Math.max(1, Math.ceil(activePosts.length / pageSize));
                     currentIndex = 0;
                     updatePaginationControls();
                     try { updateUrlParams(push); } catch (e) { }
@@ -876,16 +1000,18 @@
                         processSingleEmbed();
                     }
                     ensurePageSizeControls();
+                    ensureRandomControls();
                 });
             });
         };
         ensurePageSizeControls();
+        ensureRandomControls();
         updatePaginationControls();
         renderPage(currentPage, { push: false });
         window.addEventListener('popstate', function () {
             try {
                 readUrlState();
-                totalPages = Math.max(1, Math.ceil(posts.length / pageSize));
+                totalPages = Math.max(1, Math.ceil(activePosts.length / pageSize));
                 currentPage = Math.max(1, Math.min(totalPages, currentPage));
                 renderPage(currentPage, { push: false });
             } catch (e) { }
