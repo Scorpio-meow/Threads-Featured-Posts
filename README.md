@@ -4,11 +4,11 @@
 
 ## 核心功能特色 (Key Features)
 
-- **搜尋與標籤篩選 (Search & Tag Filter)**：控制列提供即時搜尋輸入框，可依作者名稱、貼文內文或 Hashtag 進行過濾。頁面頂部另設有「熱門標籤篩選列」，點擊標籤即可快速切換篩選，所有篩選狀態均同步至 URL 參數以利分享。
-- **手動深色/淺色主題 (Manual Dark / Light Mode)**：控制列提供主題切換按鈕，點擊即可在深色與淺色模式之間手動切換，並將偏好記錄至 `localStorage` 以便下次造訪時延續設定。
+- **搜尋與標籤篩選 (Search & Tag Filter)**：控制列提供即時搜尋輸入框，可依作者名稱、貼文內文或 Hashtag 進行過濾。頁面頂部設有「熱門標籤篩選列」，預設僅顯示前 10 個最熱門標籤，並提供「更多/收起」按鈕以便展開與折疊其餘標籤（狀態保存於 `sessionStorage`），點擊標籤即可快速切換篩選，所有篩選狀態均同步至 URL 參數以利分享。
+- **手動深色/淺色主題 (Manual Dark / Light Mode)**：控制列提供主題切換按鈕，點擊即可在深色與淺色模式之間手動切換，並將偏好記錄至 `localStorage` 以便下次造訪時延續設定。另外，特別優化了深色模式下分頁按鈕與隨機排序按鈕啟動狀態的對比度，提升視覺可讀性。
 - **版面配置切換 (Layout Toggle)**：控制列提供版面按鈕，可在「瀑布流 (Masonry Grid)」與「單欄列表 (List)」兩種版面間自由切換，偏好同樣儲存於 `localStorage`。
 - **自動限流與退避策略 (Rate Limit Handling)**：全域攔截 HTTP 429 錯誤與 Threads 腳本錯誤，若觸發速率限制會自動呈現提示，暫停載入貼文，並透過動態計算的回避時間 (Backoff) 自動恢復。
-- **智慧分頁與效能優化 (Smart Pagination)**：支援 URL 狀態同步的分頁功能 (支援 5, 10, 25, 50 筆等自訂選項)。透過 `requestIdleCallback` 以分塊 (chunks) 方式渲染 DOM，避免阻塞主執行緒 (Main Thread) 導致畫面卡頓。
+- **智慧分頁與效能優化 (Smart Pagination)**：支援 URL 狀態同步的分頁功能 (支援 5, 10, 25, 50 筆等自訂選項)，切換每頁顯示貼文數量時會重新整理（刷新）頁面以確保頁面狀態一致。透過 `requestIdleCallback` 以分塊 (chunks) 方式渲染 DOM，避免阻塞主執行緒 (Main Thread) 導致畫面卡頓。
 - **隨機排序與種子洗牌 (Random Sorting & Seeded Shuffle)**：支援一鍵切換隨機排序與預設排序。在隨機排序模式下，使用基於 URL 參數的隨機排序種子 (Seed) 以確保分頁時的文章順序一致，並提供「重新洗牌」功能以重新整理隨機排序順序。
 - **PWA (Progressive Web App) 支援**：支援離線存取功能，利用 Service Worker 快取核心靜態資源（包括 HTML、CSS、JS、設定檔與圖示），並提供完整的 Manifest 設定檔，支援應用程式安裝與獨立視窗運行。
 - **高強度的 Iframe 監控**：使用 `MutationObserver` 嚴格監控由 `embed.js` 生成的 iframes，能自動捕捉 `X-Frame-Options` 阻擋或瀏覽器錯誤畫面，並執行優雅降級。

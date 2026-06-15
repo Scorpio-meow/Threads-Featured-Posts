@@ -197,11 +197,24 @@
             syncPageSizeControls();
             return;
         }
-        pageSize = normalized;
-        totalPages = Math.max(1, Math.ceil(activePosts.length / pageSize));
-        currentPage = 0;
-        syncPageSizeControls();
-        renderPage(1, { push: true });
+        try {
+            var u = new URL(window.location.href);
+            u.searchParams.set('page', 1);
+            u.searchParams.set('page_size', normalized);
+            window.location.href = u.toString();
+        } catch (e) {
+            var search = '?page=1&page_size=' + normalized;
+            if (isRandomMode && randomSeed) {
+                search += '&random=' + randomSeed;
+            }
+            if (searchQuery) {
+                search += '&search=' + encodeURIComponent(searchQuery);
+            }
+            if (selectedTag) {
+                search += '&tag=' + encodeURIComponent(selectedTag);
+            }
+            window.location.search = search;
+        }
     }
     function buildPageSizeControl() {
         var control = document.createElement('label');
@@ -943,6 +956,20 @@
             } else {
                 if (bar) bar.style.display = 'block';
             }
+            var limit = 10;
+            var isExpanded = false;
+            try {
+                isExpanded = sessionStorage.getItem('tags_expanded') === 'true';
+            } catch (e) { }
+
+            if (selectedTag) {
+                var selectedIndex = sortedTags.findIndex(function (t) {
+                    return t.toLowerCase() === selectedTag.toLowerCase();
+                });
+                if (selectedIndex >= limit) {
+                    isExpanded = true;
+                }
+            }
             var allPill = document.createElement('button');
             allPill.className = 'tag-pill' + (!selectedTag ? ' active' : '');
             allPill.textContent = '全部貼文';
@@ -961,7 +988,8 @@
                 }
             });
             tagsContainer.appendChild(allPill);
-            sortedTags.forEach(function (tag) {
+
+            sortedTags.forEach(function (tag, index) {
                 var originalTag = tag;
                 for (var i = 0; i < normalizedPosts.length; i++) {
                     var found = normalizedPosts[i].tags.find(function (t) { return t.toLowerCase() === tag; });
@@ -993,8 +1021,37 @@
                         window.location.search = search;
                     }
                 });
+
+                if (index >= limit && !isExpanded) {
+                    pill.style.display = 'none';
+                    pill.classList.add('tag-pill--hidden');
+                }
                 tagsContainer.appendChild(pill);
             });
+
+            if (sortedTags.length > limit) {
+                var toggleBtn = document.createElement('button');
+                toggleBtn.className = 'tag-pill tag-pill--toggle';
+                if (isExpanded) {
+                    toggleBtn.innerHTML = '收起 <span style="font-size: 0.72rem; margin-left: 2px;">▲</span>';
+                    toggleBtn.addEventListener('click', function () {
+                        try {
+                            sessionStorage.setItem('tags_expanded', 'false');
+                        } catch (e) { }
+                        renderTagsContainer();
+                    });
+                } else {
+                    var remainingCount = sortedTags.length - limit;
+                    toggleBtn.innerHTML = '更多 (' + remainingCount + ') <span style="font-size: 0.72rem; margin-left: 2px;">▼</span>';
+                    toggleBtn.addEventListener('click', function () {
+                        try {
+                            sessionStorage.setItem('tags_expanded', 'true');
+                        } catch (e) { }
+                        renderTagsContainer();
+                    });
+                }
+                tagsContainer.appendChild(toggleBtn);
+            }
         }
         function updateTagPillActiveState() {
             var pills = document.querySelectorAll('.tag-pill');
