@@ -709,6 +709,96 @@
     }
     function triggerRelayouts() { }
     /**
+     * isIframeLoadSuccessful(iframeNode)
+     * 判斷 Threads embed iframe 是否真正載入成功。
+     *
+     * 成功的充要條件：
+     *   1. src 屬於允許的 Threads 網域（threads.com）
+     *   2. iframe 的實際渲染高度 >= SUCCESS_HEIGHT_THRESHOLD（預設 200px）
+     *      → Threads embed 渲染完成後高度會擴展到 400px+，失敗頁/空白 iframe 高度極低
+     *
+     * 失敗情況：
+     *   - src 為 chrome-error: / chromewebdata（X-Frame 阻擋）
+     *   - src 屬於 Facebook/Meta 錯誤網域（fb.com、facebook.com 等）
+     *   - 高度過低（iframe 存在但內容未渲染）
+     */
+    var SUCCESS_HEIGHT_THRESHOLD = 200; // px，低於此視為未成功渲染
+    var FACEBOOK_ERROR_HOSTS = ['facebook.com', 'www.facebook.com', 'fb.com', 'www.fb.com', 'static.xx.fbcdn.net'];
+
+    function isIframeLoadSuccessful(iframeNode) {
+        try {
+            var src = iframeNode.getAttribute('src') || iframeNode.src || '';
+            // chrome-error 或空 src
+            if (!src || /chrome-error:|chromewebdata/i.test(src)) return false;
+            // Facebook 錯誤頁網域
+            try {
+                var srcHost = new URL(src).hostname.toLowerCase();
+                for (var i = 0; i < FACEBOOK_ERROR_HOSTS.length; i++) {
+                    if (srcHost === FACEBOOK_ERROR_HOSTS[i] || srcHost.endsWith('.' + FACEBOOK_ERROR_HOSTS[i])) {
+                        console.warn('[iframe] Facebook error domain detected: ' + srcHost);
+                        return false;
+                    }
+                }
+            } catch (e) {}
+            // 高度檢查：Threads embed 渲染成功後高度會顯著擴展
+            var h = iframeNode.offsetHeight || iframeNode.clientHeight || 0;
+            if (h > 0 && h < SUCCESS_HEIGHT_THRESHOLD) {
+                console.warn('[iframe] 高度過低 (' + h + 'px)，視為未成功渲染');
+                return false;
+            }
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    /**
+     * waitForIframeHeight(iframeNode, minHeight, timeout)
+     * 等待 iframe 高度達到 minHeight，用 ResizeObserver（或輪詢回退）實作。
+     * 回傳 Promise<boolean>。
+     */
+    function waitForIframeHeight(iframeNode, minHeight, timeout) {
+        return new Promise(function (resolve) {
+            var min = minHeight || SUCCESS_HEIGHT_THRESHOLD;
+            var tOut = timeout || 15000;
+            var resolved = false;
+            var timerId, ro;
+
+            function cleanup() {
+                if (timerId) clearTimeout(timerId);
+                if (ro) { try { ro.disconnect(); } catch(e) {} }
+            }
+            function finish(ok) {
+                if (resolved) return;
+                resolved = true;
+                cleanup();
+                resolve(ok);
+            }
+
+            // 已達高度，直接回傳
+            var h = iframeNode.offsetHeight || iframeNode.clientHeight || 0;
+            if (h >= min) { finish(true); return; }
+
+            timerId = setTimeout(function () { finish(false); }, tOut);
+
+            if (window.ResizeObserver) {
+                ro = new ResizeObserver(function () {
+                    var h2 = iframeNode.offsetHeight || iframeNode.clientHeight || 0;
+                    if (h2 >= min) finish(true);
+                });
+                ro.observe(iframeNode);
+            } else {
+                // 回退：每 300ms 輪詢一次
+                var poll = setInterval(function () {
+                    var h3 = iframeNode.offsetHeight || iframeNode.clientHeight || 0;
+                    if (h3 >= min) { clearInterval(poll); finish(true); }
+                }, 300);
+                timerId = setTimeout(function () { clearInterval(poll); finish(false); }, tOut);
+            }
+        });
+    }
+
+    /**
      * loadIframeWithTimeout(blockquote, ms)
      * 等待 Threads embed.js 在指定 blockquote 內產生 iframe，並監聽其載入結果。
      * 統一封裝所有 MutationObserver、timeout、chrome-error 偵測邏輯，
@@ -814,23 +904,33 @@
                                 }, { once: true });
                                 iframeNode.addEventListener('load', function () {
                                     var src = iframeNode.getAttribute('src') || iframeNode.src || '';
+                                    // chrome-error 直接失敗
                                     if (/chrome-error:|chromewebdata/i.test(src)) {
-                                        console.warn('[iframe] chrome error page detected, likely blocked by X-Frame-Options or similar: ' + src);
+                                        console.warn('[iframe] chrome error page detected: ' + src);
                                         markDone(false, 'xframe-deny');
                                         return;
                                     }
-                                    try {
-                                        if (iframeNode.contentWindow && iframeNode.contentWindow.location && iframeNode.contentWindow.location.href) {
-                                            var href = '';
-                                            try { href = iframeNode.contentWindow.location.href || ''; } catch (e) { }
-                                            if (/chrome-error:|chromewebdata/i.test(href)) {
-                                                markDone(false, 'xframe-deny');
-                                                return;
-                                            }
+                                    // 先做 src 層級的快速檢查（Facebook 錯誤網域等）
+                                    if (!isIframeLoadSuccessful(iframeNode)) {
+                                        // src 本身就是錯誤網域，直接失敗
+                                        var badSrc = iframeNode.getAttribute('src') || iframeNode.src || '';
+                                        if (badSrc && !/^about:/.test(badSrc)) {
+                                            console.warn('[iframe] load 失敗（src 檢查）: ' + badSrc);
+                                            markDone(false, 'iframe-error');
+                                            return;
                                         }
-                                    } catch (e) {
                                     }
-                                    markDone(true);
+                                    // 等待 iframe 高度擴展到 SUCCESS_HEIGHT_THRESHOLD
+                                    // （Threads embed 渲染完才會撐高；Facebook 錯誤頁/空白不會）
+                                    waitForIframeHeight(iframeNode, SUCCESS_HEIGHT_THRESHOLD, 12000)
+                                        .then(function (heightOk) {
+                                            if (!heightOk) {
+                                                console.warn('[iframe] 高度未達標，視為載入失敗');
+                                                markDone(false, 'iframe-error');
+                                            } else {
+                                                markDone(true);
+                                            }
+                                        });
                                 }, { once: true });
                                 setTimeout(function () {
                                     try {
@@ -871,7 +971,19 @@
                                         try { if (isHostAllowed(found.getAttribute('src') || found.src || '', ALLOWED_THREADS_HOSTS)) handleRateLimit('iframe-error'); } catch (e) { }
                                         markDone(false, 'iframe-error');
                                     }, { once: true });
-                                    found.addEventListener('load', function () { markDone(true); }, { once: true });
+                                    found.addEventListener('load', function () {
+                                        var fsrc = found.getAttribute('src') || found.src || '';
+                                        if (/chrome-error:|chromewebdata/i.test(fsrc) || !isIframeLoadSuccessful(found)) {
+                                            if (fsrc && !/^about:/.test(fsrc)) {
+                                                markDone(false, 'iframe-error');
+                                                return;
+                                            }
+                                        }
+                                        waitForIframeHeight(found, SUCCESS_HEIGHT_THRESHOLD, 12000)
+                                            .then(function (ok) {
+                                                markDone(ok, ok ? null : 'iframe-error');
+                                            });
+                                    }, { once: true });
                                 }
                             }
                         } catch (e) { }
