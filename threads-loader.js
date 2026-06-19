@@ -1445,9 +1445,9 @@
         updatePaginationControls();
         renderPage(currentPage, { push: false });
 
-        // ?post=<postLink> 單篇跳轉：使用 init() 開頭暫存的 initialPostTarget。
-        // 識別碼為貼文的 Threads 原始 URL（postLink），不受 config.js 排序/新增/刪除影響。
-        // 回退：若值為純數字字串（舊格式），仍以全域索引處理。
+        // ?post=<postLink> 單篇模式：使用 init() 開頭暫存的 initialPostTarget。
+        // 找到目標貼文後，隱藏所有 UI chrome（分頁、搜尋、標籤列），
+        // 只渲染那一篇，並在頂部顯示「回到完整列表」banner。
         (function () {
             try {
                 if (initialPostTarget === null) return;
@@ -1459,10 +1459,8 @@
                 var isNumeric = String(parsedAsIdx) === postVal && Number.isFinite(parsedAsIdx) && parsedAsIdx >= 0;
 
                 if (isNumeric) {
-                    // 舊格式：純數字索引，直接使用
                     targetGlobalIdx = parsedAsIdx;
                 } else {
-                    // 新格式：postLink URL，用 findIndex 在 activePosts 比對
                     for (var _fi = 0; _fi < activePosts.length; _fi++) {
                         if (activePosts[_fi].postLink === postVal) {
                             targetGlobalIdx = _fi;
@@ -1473,42 +1471,52 @@
 
                 if (targetGlobalIdx < 0 || targetGlobalIdx >= activePosts.length) return;
 
-                // 計算貼文在哪一頁
-                var targetPage = Math.floor(targetGlobalIdx / pageSize) + 1;
-                if (targetPage !== currentPage) {
-                    // 需要換頁，保留 ?post= 讓目標頁面繼續觸發捲動
-                    try {
-                        var u = new URL(window.location.href);
-                        u.searchParams.set('page', targetPage);
-                        window.location.href = u.toString();
-                    } catch (e) {}
-                    return;
-                }
+                var targetPost = activePosts[targetGlobalIdx];
 
-                // 已在正確頁面，等 DOM 渲染完後捲動，完成後立刻移除 ?post= 避免污染換頁 URL
-                var checkInterval = setInterval(function () {
-                    var items = container.querySelectorAll('.post-item');
-                    var localIdx = targetGlobalIdx - (currentPage - 1) * pageSize;
-                    if (items && items[localIdx]) {
-                        clearInterval(checkInterval);
-                        // 捲動到位後，立刻從 URL 靜默移除 ?post=，不產生瀏覽歷史
-                        try {
-                            var cleanUrl = new URL(window.location.href);
-                            cleanUrl.searchParams.delete('post');
-                            window.history.replaceState({}, '', cleanUrl);
-                        } catch (e) {}
-                        setTimeout(function () {
-                            try {
-                                items[localIdx].scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                items[localIdx].classList.add('post-item--highlight');
-                                setTimeout(function () {
-                                    try { items[localIdx].classList.remove('post-item--highlight'); } catch (e) {}
-                                }, 2500);
-                            } catch (e) {}
-                        }, 400);
+                // ── 單篇模式：隱藏所有 UI chrome ──────────────────────────
+                document.documentElement.classList.add('single-post-mode');
+
+                // ── 清空 container，只渲染這一篇 ──────────────────────────
+                container.innerHTML = '';
+                var singleItem = document.createElement('div');
+                singleItem.className = 'post-item post-item--single';
+                var embedCode = targetPost.embedCode || '';
+                var targetTheme = activeTheme === 'dark' ? 'dark' : 'light';
+                if (embedCode.indexOf('data-theme=') !== -1) {
+                    embedCode = embedCode.replace(/data-theme="[^"]*"/, 'data-theme="' + targetTheme + '"');
+                } else {
+                    embedCode = embedCode.replace('<blockquote ', '<blockquote data-theme="' + targetTheme + '" ');
+                }
+                singleItem.innerHTML = embedCode;
+                container.appendChild(singleItem);
+
+                // ── 插入「回到完整列表」banner ─────────────────────────────
+                var backBanner = document.createElement('div');
+                backBanner.className = 'single-post-banner';
+                // 產生「回到完整列表」的乾淨 URL（移除 ?post=）
+                var backUrl = new URL(window.location.href);
+                backUrl.searchParams.delete('post');
+                backUrl.searchParams.delete('page');
+                backUrl.searchParams.delete('page_size');
+                backBanner.innerHTML =
+                    '<a class="single-post-banner__back" href="' + backUrl.toString() + '">' +
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>' +
+                    '回到完整列表' +
+                    '</a>' +
+                    '<span class="single-post-banner__label">單篇預覽</span>';
+                container.insertBefore(backBanner, singleItem);
+
+                // ── 啟動 embed 載入 ────────────────────────────────────────
+                requestAnimationFrame(function () {
+                    var bq = container.querySelector('blockquote.text-post-media');
+                    if (bq) {
+                        allBlockquotes = [bq];
+                        currentIndex = 0;
+                        processSingleEmbed();
                     }
-                }, 200);
-                setTimeout(function () { clearInterval(checkInterval); }, 8000);
+                });
+
+                // URL 保留 ?post=，方便分享；不需要 replaceState
             } catch (e) {}
         })();
 

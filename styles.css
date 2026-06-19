@@ -1893,3 +1893,75 @@ html.dark-theme .post-item blockquote.text-post-media {
     outline-offset: 3px;
     border-radius: 12px;
 }
+
+/* ─── 單篇模式（?post= Permalink 進入）──────────────────────────────── */
+
+/* 隱藏所有 UI chrome */
+.single-post-mode .control-bar,
+.single-post-mode .tags-filter-bar,
+.single-post-mode .pagination-wrapper {
+    display: none !important;
+}
+
+/* 容器置中，限制最大寬度，讓單篇看起來更聚焦 */
+.single-post-mode #posts-container {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 0 16px 40px;
+}
+
+/* 單篇貼文本身不需要額外卡片框 */
+.post-item--single {
+    box-shadow: none;
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+
+/* ─── 回到完整列表 banner ────────────────────────────────────────────── */
+.single-post-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 4px 18px;
+    gap: 8px;
+}
+
+.single-post-banner__back {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-secondary, #6b7280);
+    text-decoration: none;
+    padding: 6px 12px 6px 8px;
+    border-radius: 8px;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.single-post-banner__back:hover {
+    background: var(--surface-hover, rgba(0,0,0,0.06));
+    color: var(--text-primary, #111827);
+}
+
+.dark-theme .single-post-banner__back:hover {
+    background: rgba(255,255,255,0.08);
+    color: #f3f4f6;
+}
+
+.single-post-banner__label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-tertiary, #9ca3af);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 99px;
+    background: var(--surface-hover, rgba(0,0,0,0.05));
+}
+
+.dark-theme .single-post-banner__label {
+    background: rgba(255,255,255,0.07);
+    color: #71717a;
+}
