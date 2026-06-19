@@ -197,6 +197,7 @@
     function updateUrlParams(push) {
         try {
             var u = new URL(window.location.href);
+            u.searchParams.delete('post'); // 換頁/搜尋等操作不應保留 ?post=
             u.searchParams.set('page', currentPage);
             u.searchParams.set('page_size', pageSize);
             if (isRandomMode && randomSeed) {
@@ -1241,6 +1242,7 @@
             function navigateTo(pageNum, size) {
                 try {
                     var u = new URL(window.location.href);
+                    u.searchParams.delete('post'); // 換頁不應保留 ?post=
                     u.searchParams.set('page', pageNum);
                     u.searchParams.set('page_size', typeof size !== 'undefined' ? size : pageSize);
                     if (isRandomMode && randomSeed) {
@@ -1442,12 +1444,18 @@
                     window.location.href = u.toString();
                     return;
                 }
-                // 已在正確頁面，等 DOM 渲染完後捲動
+                // 已在正確頁面，等 DOM 渲染完後捲動，完成後立刻移除 ?post= 避免污染換頁 URL
                 var checkInterval = setInterval(function () {
                     var items = container.querySelectorAll('.post-item');
                     var localIdx = targetGlobalIdx - (currentPage - 1) * pageSize;
                     if (items && items[localIdx]) {
                         clearInterval(checkInterval);
+                        // 立刻從 URL 靜默移除 ?post= 參數，不產生瀏覽歷史
+                        try {
+                            var cleanUrl = new URL(window.location.href);
+                            cleanUrl.searchParams.delete('post');
+                            window.history.replaceState({}, '', cleanUrl);
+                        } catch (e) {}
                         setTimeout(function () {
                             try {
                                 items[localIdx].scrollIntoView({ behavior: 'smooth', block: 'center' });
