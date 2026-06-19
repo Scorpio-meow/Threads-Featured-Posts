@@ -197,7 +197,7 @@
     function updateUrlParams(push) {
         try {
             var u = new URL(window.location.href);
-            u.searchParams.delete('post'); // 換頁/搜尋等操作不應保留 ?post=
+            // ?post= 由跳轉邏輯在捲動完後用 replaceState 自行清除，這裡不動它
             u.searchParams.set('page', currentPage);
             u.searchParams.set('page_size', pageSize);
             if (isRandomMode && randomSeed) {
@@ -903,6 +903,20 @@
             if (!Array.isArray(posts)) return;
         } catch (e) { return; }
         var CHUNK_APPEND_SIZE = 20;
+        // 在 readUrlState（會被 updateUrlParams/renderPage 覆寫 URL）之前，
+        // 先把 ?post= 參數讀出來暫存。之後跳轉邏輯直接用這個變數，
+        // 不再重新讀 URL，避免被 renderPage 的 updateUrlParams 提前清掉。
+        var initialPostTarget = null;
+        try {
+            var _initParams = new URLSearchParams(window.location.search);
+            var _postVal = _initParams.get('post');
+            if (_postVal !== null) {
+                var _parsed = parseInt(_postVal, 10);
+                if (Number.isFinite(_parsed) && _parsed >= 0) {
+                    initialPostTarget = _parsed;
+                }
+            }
+        } catch (e) {}
         readUrlState();
         normalizedPosts = posts.map(normalizePost);
         var themeToggleBtn = document.getElementById('theme-toggle');
@@ -1428,20 +1442,23 @@
         updatePaginationControls();
         renderPage(currentPage, { push: false });
 
-        // ?post=N 單篇跳轉：載入完成後捲動到目標貼文
+        // ?post=N 單篇跳轉：使用 init() 開頭暫存的 initialPostTarget，
+        // 避免被 renderPage → updateUrlParams 在 URL 上提前清除後讀不到。
         (function () {
             try {
-                var params = new URLSearchParams(window.location.search);
-                var postParam = params.get('post');
-                if (postParam === null) return;
-                var targetGlobalIdx = parseInt(postParam, 10);
-                if (!Number.isFinite(targetGlobalIdx) || targetGlobalIdx < 0) return;
+                if (initialPostTarget === null) return;
+                var targetGlobalIdx = initialPostTarget;
                 // 計算貼文在哪一頁
                 var targetPage = Math.floor(targetGlobalIdx / pageSize) + 1;
                 if (targetPage !== currentPage) {
-                    var u = new URL(window.location.href);
-                    u.searchParams.set('page', targetPage);
-                    window.location.href = u.toString();
+                    // 需要換頁，先清掉 ?post= 再帶 page 過去，
+                    // 目標頁面會因為暫存值再次觸發跳轉
+                    try {
+                        var u = new URL(window.location.href);
+                        u.searchParams.set('page', targetPage);
+                        // 保留 ?post= 讓目標頁面能繼續觸發捲動
+                        window.location.href = u.toString();
+                    } catch (e) {}
                     return;
                 }
                 // 已在正確頁面，等 DOM 渲染完後捲動，完成後立刻移除 ?post= 避免污染換頁 URL
@@ -1450,7 +1467,7 @@
                     var localIdx = targetGlobalIdx - (currentPage - 1) * pageSize;
                     if (items && items[localIdx]) {
                         clearInterval(checkInterval);
-                        // 立刻從 URL 靜默移除 ?post= 參數，不產生瀏覽歷史
+                        // 捲動到位後，立刻從 URL 靜默移除 ?post=，不產生瀏覽歷史
                         try {
                             var cleanUrl = new URL(window.location.href);
                             cleanUrl.searchParams.delete('post');
