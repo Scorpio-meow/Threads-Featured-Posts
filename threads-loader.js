@@ -141,14 +141,16 @@
         } catch (e) { }
     }
     /**
-     * copyPermalink(postIndex)
+     * copyPermalink(postLink)
      * 產生並複製單篇貼文的永久連結到剪貼簿。
-     * postIndex 是在 activePosts 陣列中的 0-based 索引（可轉為全域索引以利分享）。
+     * postLink 是該貼文的 Threads 原始 URL，用它當識別碼，
+     * 不受 config.js 新增、刪除、重排影響。
+     * 若 postLink 為空（舊格式純字串且解析失敗），回退到全域索引。
      */
-    function copyPermalink(globalIndex) {
+    function copyPermalink(postLink) {
         try {
             var u = new URL(window.location.href);
-            u.searchParams.set('post', globalIndex);
+            u.searchParams.set('post', postLink || '');
             // 保留目前篩選狀態，方便對方看到相同的脈絡
             u.searchParams.delete('page');
             u.searchParams.delete('page_size');
@@ -906,15 +908,14 @@
         // 在 readUrlState（會被 updateUrlParams/renderPage 覆寫 URL）之前，
         // 先把 ?post= 參數讀出來暫存。之後跳轉邏輯直接用這個變數，
         // 不再重新讀 URL，避免被 renderPage 的 updateUrlParams 提前清掉。
+        // initialPostTarget：儲存 ?post= 的原始字串值（postLink URL 或舊格式索引數字字串）
+        // 必須在 readUrlState / renderPage 之前讀取，否則 updateUrlParams 會覆寫 URL。
         var initialPostTarget = null;
         try {
             var _initParams = new URLSearchParams(window.location.search);
             var _postVal = _initParams.get('post');
-            if (_postVal !== null) {
-                var _parsed = parseInt(_postVal, 10);
-                if (Number.isFinite(_parsed) && _parsed >= 0) {
-                    initialPostTarget = _parsed;
-                }
+            if (_postVal !== null && _postVal !== '') {
+                initialPostTarget = _postVal; // 保留原始字串，不 parseInt
             }
         } catch (e) {}
         readUrlState();
@@ -1168,7 +1169,8 @@
                     }
                     item.innerHTML = embedWithTheme;
                     // 分享單篇貼文 Permalink 按鈕
-                    (function (capturedGlobalIdx, capturedItem) {
+                    // 改用 postLink（Threads 原始 URL）當識別碼，不受排序/新增/刪除影響
+                    (function (capturedPostLink, capturedGlobalIdx, capturedItem) {
                         var shareBtn = document.createElement('button');
                         shareBtn.className = 'permalink-btn';
                         shareBtn.title = '複製此貼文連結';
@@ -1176,11 +1178,12 @@
                         shareBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>';
                         shareBtn.addEventListener('click', function (e) {
                             e.stopPropagation();
-                            copyPermalink(capturedGlobalIdx);
+                            // 優先用 postLink；若為空（純字串舊格式解析失敗）回退到全域索引
+                            copyPermalink(capturedPostLink || String(capturedGlobalIdx));
                             showCopiedTooltip(shareBtn);
                         });
                         capturedItem.appendChild(shareBtn);
-                    })(globalIdx, item);
+                    })(postObj.postLink || '', globalIdx, item);
                     frag.appendChild(item);
                     count++;
                 }
@@ -1442,25 +1445,46 @@
         updatePaginationControls();
         renderPage(currentPage, { push: false });
 
-        // ?post=N 單篇跳轉：使用 init() 開頭暫存的 initialPostTarget，
-        // 避免被 renderPage → updateUrlParams 在 URL 上提前清除後讀不到。
+        // ?post=<postLink> 單篇跳轉：使用 init() 開頭暫存的 initialPostTarget。
+        // 識別碼為貼文的 Threads 原始 URL（postLink），不受 config.js 排序/新增/刪除影響。
+        // 回退：若值為純數字字串（舊格式），仍以全域索引處理。
         (function () {
             try {
                 if (initialPostTarget === null) return;
-                var targetGlobalIdx = initialPostTarget;
+                var postVal = initialPostTarget;
+
+                // 找出目標貼文在 activePosts 中的全域索引
+                var targetGlobalIdx = -1;
+                var parsedAsIdx = parseInt(postVal, 10);
+                var isNumeric = String(parsedAsIdx) === postVal && Number.isFinite(parsedAsIdx) && parsedAsIdx >= 0;
+
+                if (isNumeric) {
+                    // 舊格式：純數字索引，直接使用
+                    targetGlobalIdx = parsedAsIdx;
+                } else {
+                    // 新格式：postLink URL，用 findIndex 在 activePosts 比對
+                    for (var _fi = 0; _fi < activePosts.length; _fi++) {
+                        if (activePosts[_fi].postLink === postVal) {
+                            targetGlobalIdx = _fi;
+                            break;
+                        }
+                    }
+                }
+
+                if (targetGlobalIdx < 0 || targetGlobalIdx >= activePosts.length) return;
+
                 // 計算貼文在哪一頁
                 var targetPage = Math.floor(targetGlobalIdx / pageSize) + 1;
                 if (targetPage !== currentPage) {
-                    // 需要換頁，先清掉 ?post= 再帶 page 過去，
-                    // 目標頁面會因為暫存值再次觸發跳轉
+                    // 需要換頁，保留 ?post= 讓目標頁面繼續觸發捲動
                     try {
                         var u = new URL(window.location.href);
                         u.searchParams.set('page', targetPage);
-                        // 保留 ?post= 讓目標頁面能繼續觸發捲動
                         window.location.href = u.toString();
                     } catch (e) {}
                     return;
                 }
+
                 // 已在正確頁面，等 DOM 渲染完後捲動，完成後立刻移除 ?post= 避免污染換頁 URL
                 var checkInterval = setInterval(function () {
                     var items = container.querySelectorAll('.post-item');
