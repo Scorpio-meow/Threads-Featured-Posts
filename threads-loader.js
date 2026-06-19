@@ -140,6 +140,60 @@
             selectedTag = t || '';
         } catch (e) { }
     }
+    /**
+     * copyPermalink(postIndex)
+     * 產生並複製單篇貼文的永久連結到剪貼簿。
+     * postIndex 是在 activePosts 陣列中的 0-based 索引（可轉為全域索引以利分享）。
+     */
+    function copyPermalink(globalIndex) {
+        try {
+            var u = new URL(window.location.href);
+            u.searchParams.set('post', globalIndex);
+            // 保留目前篩選狀態，方便對方看到相同的脈絡
+            u.searchParams.delete('page');
+            u.searchParams.delete('page_size');
+            u.searchParams.delete('random');
+            if (searchQuery) u.searchParams.set('search', searchQuery);
+            else u.searchParams.delete('search');
+            if (selectedTag) u.searchParams.set('tag', selectedTag);
+            else u.searchParams.delete('tag');
+            var link = u.toString();
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(link).catch(function () {
+                    fallbackCopyText(link);
+                });
+            } else {
+                fallbackCopyText(link);
+            }
+            return link;
+        } catch (e) {
+            return null;
+        }
+    }
+    function fallbackCopyText(text) {
+        try {
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+        } catch (e) { }
+    }
+    function showCopiedTooltip(btn) {
+        try {
+            var original = btn.innerHTML;
+            btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+            btn.classList.add('permalink-btn--copied');
+            setTimeout(function () {
+                btn.innerHTML = original;
+                btn.classList.remove('permalink-btn--copied');
+            }, 1800);
+        } catch (e) { }
+    }
     function updateUrlParams(push) {
         try {
             var u = new URL(window.location.href);
@@ -630,7 +684,7 @@
             finishAttempt(false, 'process-error');
         };
         try {
-            waitForIframeLoad(blockquote, typeof IFRAME_TIMEOUT !== 'undefined' ? IFRAME_TIMEOUT : 30000)
+            loadIframeWithTimeout(blockquote, typeof IFRAME_TIMEOUT !== 'undefined' ? IFRAME_TIMEOUT : 30000)
                 .then(function (success) {
                     finishAttempt(!!success, success ? null : 'timeout');
                 });
@@ -651,7 +705,13 @@
         }
     }
     function triggerRelayouts() { }
-    function waitForIframeLoad(blockquote, timeout) {
+    /**
+     * loadIframeWithTimeout(blockquote, ms)
+     * 等待 Threads embed.js 在指定 blockquote 內產生 iframe，並監聽其載入結果。
+     * 統一封裝所有 MutationObserver、timeout、chrome-error 偵測邏輯，
+     * 回傳 Promise<boolean>：true = 載入成功，false = 失敗或超時。
+     */
+    function loadIframeWithTimeout(blockquote, timeout) {
         return new Promise(function (resolve) {
             var timeoutId, observer, earlyTimeoutId;
             var resolved = false;
@@ -769,7 +829,7 @@
                                     }
                                     markDone(true);
                                 }, { once: true });
-                                requestAnimationFrame(function () {
+                                setTimeout(function () {
                                     try {
                                         var src2 = iframeNode.getAttribute('src') || iframeNode.src || '';
                                         if (/chrome-error:|chromewebdata/i.test(src2)) {
@@ -1082,6 +1142,7 @@
                     var item = document.createElement('div');
                     item.className = 'post-item';
                     var postObj = postsToAppend[idx++];
+                    var globalIdx = (currentPage - 1) * pageSize + (idx - 1);
                     var embedCode = typeof postObj === 'string' ? postObj : postObj.embedCode;
                     var embedWithTheme = embedCode;
                     var targetTheme = activeTheme === 'dark' ? 'dark' : 'light';
@@ -1091,6 +1152,20 @@
                         embedWithTheme = embedWithTheme.replace('<blockquote ', '<blockquote data-theme="' + targetTheme + '" ');
                     }
                     item.innerHTML = embedWithTheme;
+                    // 分享單篇貼文 Permalink 按鈕
+                    (function (capturedGlobalIdx, capturedItem) {
+                        var shareBtn = document.createElement('button');
+                        shareBtn.className = 'permalink-btn';
+                        shareBtn.title = '複製此貼文連結';
+                        shareBtn.setAttribute('aria-label', '複製此貼文的永久連結');
+                        shareBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>';
+                        shareBtn.addEventListener('click', function (e) {
+                            e.stopPropagation();
+                            copyPermalink(capturedGlobalIdx);
+                            showCopiedTooltip(shareBtn);
+                        });
+                        capturedItem.appendChild(shareBtn);
+                    })(globalIdx, item);
                     frag.appendChild(item);
                     count++;
                 }
@@ -1350,6 +1425,44 @@
         ensureRandomControls();
         updatePaginationControls();
         renderPage(currentPage, { push: false });
+
+        // ?post=N 單篇跳轉：載入完成後捲動到目標貼文
+        (function () {
+            try {
+                var params = new URLSearchParams(window.location.search);
+                var postParam = params.get('post');
+                if (postParam === null) return;
+                var targetGlobalIdx = parseInt(postParam, 10);
+                if (!Number.isFinite(targetGlobalIdx) || targetGlobalIdx < 0) return;
+                // 計算貼文在哪一頁
+                var targetPage = Math.floor(targetGlobalIdx / pageSize) + 1;
+                if (targetPage !== currentPage) {
+                    var u = new URL(window.location.href);
+                    u.searchParams.set('page', targetPage);
+                    window.location.href = u.toString();
+                    return;
+                }
+                // 已在正確頁面，等 DOM 渲染完後捲動
+                var checkInterval = setInterval(function () {
+                    var items = container.querySelectorAll('.post-item');
+                    var localIdx = targetGlobalIdx - (currentPage - 1) * pageSize;
+                    if (items && items[localIdx]) {
+                        clearInterval(checkInterval);
+                        setTimeout(function () {
+                            try {
+                                items[localIdx].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                items[localIdx].classList.add('post-item--highlight');
+                                setTimeout(function () {
+                                    try { items[localIdx].classList.remove('post-item--highlight'); } catch (e) {}
+                                }, 2500);
+                            } catch (e) {}
+                        }, 400);
+                    }
+                }, 200);
+                setTimeout(function () { clearInterval(checkInterval); }, 8000);
+            } catch (e) {}
+        })();
+
         window.addEventListener('popstate', function () {
             try {
                 readUrlState();

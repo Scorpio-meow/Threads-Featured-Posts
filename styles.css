@@ -1828,3 +1828,68 @@ html.dark-theme .post-item blockquote.text-post-media {
         margin-bottom: 14px;
     }
 }
+/* ─── Permalink 分享按鈕 ─────────────────────────────────────────── */
+.post-item {
+    position: relative;
+}
+
+.permalink-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    background: rgba(var(--surface-rgb, 255 255 255) / 0.85);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    color: var(--text-secondary, #6b7280);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+    opacity: 0;
+    transform: scale(0.85);
+    transition: opacity 0.18s ease, transform 0.18s ease, background 0.15s ease, color 0.15s ease;
+    z-index: 10;
+}
+
+.post-item:hover .permalink-btn,
+.post-item:focus-within .permalink-btn {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.permalink-btn:hover {
+    background: var(--accent, #6366f1);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+}
+
+.permalink-btn--copied {
+    background: #22c55e !important;
+    color: #fff !important;
+    box-shadow: 0 2px 8px rgba(34, 197, 94, 0.4) !important;
+}
+
+/* 深色模式下的基底色 */
+.dark-theme .permalink-btn {
+    background: rgba(30 30 34 / 0.88);
+    color: #a1a1aa;
+}
+
+/* ─── ?post=N 高亮動畫 ───────────────────────────────────────────── */
+@keyframes post-highlight-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.55); }
+    60%  { box-shadow: 0 0 0 10px rgba(99, 102, 241, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+}
+
+.post-item--highlight {
+    animation: post-highlight-pulse 1.4s ease-out 2;
+    outline: 2px solid rgba(99, 102, 241, 0.6);
+    outline-offset: 3px;
+    border-radius: 12px;
+}
