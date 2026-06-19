@@ -1440,85 +1440,98 @@
                 });
             });
         };
-        ensurePageSizeControls();
-        ensureRandomControls();
-        updatePaginationControls();
-        renderPage(currentPage, { push: false });
+        // ?post=<postLink> 單篇模式：在 renderPage 之前判斷，
+        // 若有 ?post= 則完全跳過 renderPage，直接渲染單篇，
+        // 避免 renderPage → updateUrlParams 把 ?post= 覆寫掉。
+        if (initialPostTarget !== null) {
+            (function () {
+                try {
+                    var postVal = initialPostTarget;
 
-        // ?post=<postLink> 單篇模式：使用 init() 開頭暫存的 initialPostTarget。
-        // 找到目標貼文後，隱藏所有 UI chrome（分頁、搜尋、標籤列），
-        // 只渲染那一篇，並在頂部顯示「回到完整列表」banner。
-        (function () {
-            try {
-                if (initialPostTarget === null) return;
-                var postVal = initialPostTarget;
+                    // 找出目標貼文在 activePosts 中的全域索引
+                    var targetGlobalIdx = -1;
+                    var parsedAsIdx = parseInt(postVal, 10);
+                    var isNumeric = String(parsedAsIdx) === postVal && Number.isFinite(parsedAsIdx) && parsedAsIdx >= 0;
 
-                // 找出目標貼文在 activePosts 中的全域索引
-                var targetGlobalIdx = -1;
-                var parsedAsIdx = parseInt(postVal, 10);
-                var isNumeric = String(parsedAsIdx) === postVal && Number.isFinite(parsedAsIdx) && parsedAsIdx >= 0;
-
-                if (isNumeric) {
-                    targetGlobalIdx = parsedAsIdx;
-                } else {
-                    for (var _fi = 0; _fi < activePosts.length; _fi++) {
-                        if (activePosts[_fi].postLink === postVal) {
-                            targetGlobalIdx = _fi;
-                            break;
+                    if (isNumeric) {
+                        targetGlobalIdx = parsedAsIdx;
+                    } else {
+                        for (var _fi = 0; _fi < activePosts.length; _fi++) {
+                            if (activePosts[_fi].postLink === postVal) {
+                                targetGlobalIdx = _fi;
+                                break;
+                            }
                         }
                     }
-                }
 
-                if (targetGlobalIdx < 0 || targetGlobalIdx >= activePosts.length) return;
-
-                var targetPost = activePosts[targetGlobalIdx];
-
-                // ── 單篇模式：隱藏所有 UI chrome ──────────────────────────
-                document.documentElement.classList.add('single-post-mode');
-
-                // ── 清空 container，只渲染這一篇 ──────────────────────────
-                container.innerHTML = '';
-                var singleItem = document.createElement('div');
-                singleItem.className = 'post-item post-item--single';
-                var embedCode = targetPost.embedCode || '';
-                var targetTheme = activeTheme === 'dark' ? 'dark' : 'light';
-                if (embedCode.indexOf('data-theme=') !== -1) {
-                    embedCode = embedCode.replace(/data-theme="[^"]*"/, 'data-theme="' + targetTheme + '"');
-                } else {
-                    embedCode = embedCode.replace('<blockquote ', '<blockquote data-theme="' + targetTheme + '" ');
-                }
-                singleItem.innerHTML = embedCode;
-                container.appendChild(singleItem);
-
-                // ── 插入「回到完整列表」banner ─────────────────────────────
-                var backBanner = document.createElement('div');
-                backBanner.className = 'single-post-banner';
-                // 產生「回到完整列表」的乾淨 URL（移除 ?post=）
-                var backUrl = new URL(window.location.href);
-                backUrl.searchParams.delete('post');
-                backUrl.searchParams.delete('page');
-                backUrl.searchParams.delete('page_size');
-                backBanner.innerHTML =
-                    '<a class="single-post-banner__back" href="' + backUrl.toString() + '">' +
-                    '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>' +
-                    '回到完整列表' +
-                    '</a>' +
-                    '<span class="single-post-banner__label">單篇預覽</span>';
-                container.insertBefore(backBanner, singleItem);
-
-                // ── 啟動 embed 載入 ────────────────────────────────────────
-                requestAnimationFrame(function () {
-                    var bq = container.querySelector('blockquote.text-post-media');
-                    if (bq) {
-                        allBlockquotes = [bq];
-                        currentIndex = 0;
-                        processSingleEmbed();
+                    if (targetGlobalIdx < 0 || targetGlobalIdx >= activePosts.length) {
+                        // 找不到貼文，回退到正常模式
+                        ensurePageSizeControls();
+                        ensureRandomControls();
+                        updatePaginationControls();
+                        renderPage(currentPage, { push: false });
+                        return;
                     }
-                });
 
-                // URL 保留 ?post=，方便分享；不需要 replaceState
-            } catch (e) {}
-        })();
+                    var targetPost = activePosts[targetGlobalIdx];
+
+                    // ── 單篇模式：隱藏所有 UI chrome ──────────────────────────
+                    document.documentElement.classList.add('single-post-mode');
+
+                    // ── 只渲染這一篇 ───────────────────────────────────────────
+                    container.innerHTML = '';
+                    var singleItem = document.createElement('div');
+                    singleItem.className = 'post-item post-item--single';
+                    var embedCode = targetPost.embedCode || '';
+                    var targetTheme = activeTheme === 'dark' ? 'dark' : 'light';
+                    if (embedCode.indexOf('data-theme=') !== -1) {
+                        embedCode = embedCode.replace(/data-theme="[^"]*"/, 'data-theme="' + targetTheme + '"');
+                    } else {
+                        embedCode = embedCode.replace('<blockquote ', '<blockquote data-theme="' + targetTheme + '" ');
+                    }
+                    singleItem.innerHTML = embedCode;
+                    container.appendChild(singleItem);
+
+                    // ── 插入「回到完整列表」banner ─────────────────────────────
+                    var backBanner = document.createElement('div');
+                    backBanner.className = 'single-post-banner';
+                    var backUrl = new URL(window.location.href);
+                    backUrl.searchParams.delete('post');
+                    backUrl.searchParams.delete('page');
+                    backUrl.searchParams.delete('page_size');
+                    backBanner.innerHTML =
+                        '<a class="single-post-banner__back" href="' + backUrl.toString() + '">' +
+                        '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>' +
+                        '回到完整列表' +
+                        '</a>' +
+                        '<span class="single-post-banner__label">單篇預覽</span>';
+                    container.insertBefore(backBanner, singleItem);
+
+                    // ── 啟動 embed 載入 ────────────────────────────────────────
+                    requestAnimationFrame(function () {
+                        var bq = container.querySelector('blockquote.text-post-media');
+                        if (bq) {
+                            allBlockquotes = [bq];
+                            currentIndex = 0;
+                            processSingleEmbed();
+                        }
+                    });
+
+                    // URL 保留 ?post= 方便分享，不做 replaceState
+                } catch (e) {
+                    // 發生例外時回退到正常模式
+                    ensurePageSizeControls();
+                    ensureRandomControls();
+                    updatePaginationControls();
+                    renderPage(currentPage, { push: false });
+                }
+            })();
+        } else {
+            ensurePageSizeControls();
+            ensureRandomControls();
+            updatePaginationControls();
+            renderPage(currentPage, { push: false });
+        }
 
         window.addEventListener('popstate', function () {
             try {
