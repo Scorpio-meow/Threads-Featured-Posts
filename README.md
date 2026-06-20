@@ -53,8 +53,9 @@ cd Threads-Featured-Posts
 
 ```javascript
 // config.js
-const LOAD_DELAY = 4000;                   // 貼文 iframe 載入的間隔延遲 (毫秒)
-const BATCH_SIZE = 3;                      // 保留參數
+const LOAD_DELAY = 4000;                   // 送率限制退避的基礎延遲 (毫秒)
+const BATCH_SIZE = 3;                      // 小批次併發上限（同時嵌入幾篇，夾在 1~4）
+const EMBED_STAGGER_DELAY = 700;           // 篇與篇啟動的錯開間隔 (毫秒)
 const IFRAME_TIMEOUT = 20000;             // 單個 iframe 載入的主超時 (毫秒)
 const MIN_IFRAME_TIMEOUT = 8000;          // iframe 載入的最小等待時間 (毫秒)
 const RATE_LIMIT_BACKOFF = 60000;        // 遭遇速率限制時的基礎退避時間 (毫秒)
@@ -143,7 +144,7 @@ bunx http-server -p 3000
 5. 若啟用隨機排序，將使用種子隨機演算法 (Seeded Shuffle) 對過濾後的貼文陣列進行打亂，確保在相同隨機參數下分頁切換時能維持一致的貼文順序。
 6. 透過分塊方式 (Chunk appending) 快速將 HTML 內容推入 `#posts-container`，提供即時的骨架屏視覺，同時渲染熱門標籤篩選列。
 7. 非同步載入官方的 `https://www.threads.com/embed.js`。
-8. `threads-loader.js` 循序處理每一則貼文，監聽 iframe 建立狀況，並根據 `LOAD_DELAY` 動態調配載入速度以避免觸發 Threads API 封鎖。
+8. `threads-loader.js` 以小批次併發方式載入貼文（同時最多 `BATCH_SIZE` 篇，篇與篇以 `EMBED_STAGGER_DELAY` 錯開），監聽 iframe 建立狀況。這在「足夠快」與「不觸發 Threads 500 限流」之間取得平衡；已刪除/私密的「死貼」只試一次即改顯示「在 Threads 查看此貼文」連結，不重試。
 
 ## 部署建議 (Deployment)
 
