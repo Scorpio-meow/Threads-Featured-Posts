@@ -1828,7 +1828,7 @@ html.dark-theme .post-item blockquote.text-post-media {
         margin-bottom: 14px;
     }
 }
-/* ─── Permalink 分享按鈕 ─────────────────────────────────────────── */
+
 .post-item {
     position: relative;
 }
@@ -1846,8 +1846,8 @@ html.dark-theme .post-item blockquote.text-post-media {
     border: none;
     cursor: pointer;
     background: rgba(var(--surface-rgb, 255 255 255) / 0.85);
-    backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
     color: var(--text-secondary, #6b7280);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
     opacity: 0;
@@ -1874,17 +1874,23 @@ html.dark-theme .post-item blockquote.text-post-media {
     box-shadow: 0 2px 8px rgba(34, 197, 94, 0.4) !important;
 }
 
-/* 深色模式下的基底色 */
 .dark-theme .permalink-btn {
     background: rgba(30 30 34 / 0.88);
     color: #a1a1aa;
 }
 
-/* ─── ?post=N 高亮動畫 ───────────────────────────────────────────── */
 @keyframes post-highlight-pulse {
-    0%   { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.55); }
-    60%  { box-shadow: 0 0 0 10px rgba(99, 102, 241, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+    0% {
+        box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.55);
+    }
+
+    60% {
+        box-shadow: 0 0 0 10px rgba(99, 102, 241, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+    }
 }
 
 .post-item--highlight {
@@ -1894,23 +1900,18 @@ html.dark-theme .post-item blockquote.text-post-media {
     border-radius: 12px;
 }
 
-/* ─── 單篇模式（?post= Permalink 進入）──────────────────────────────── */
-
-/* 隱藏所有 UI chrome */
 .single-post-mode .control-bar,
 .single-post-mode .tags-filter-bar,
 .single-post-mode .pagination-wrapper {
     display: none !important;
 }
 
-/* 容器置中，限制最大寬度，讓單篇看起來更聚焦 */
 .single-post-mode #posts-container {
     max-width: 680px;
     margin: 0 auto;
     padding: 0 16px 40px;
 }
 
-/* 單篇貼文本身不需要額外卡片框 */
 .post-item--single {
     box-shadow: none;
     background: transparent;
@@ -1918,7 +1919,6 @@ html.dark-theme .post-item blockquote.text-post-media {
     padding: 0;
 }
 
-/* ─── 回到完整列表 banner ────────────────────────────────────────────── */
 .single-post-banner {
     display: flex;
     align-items: center;
@@ -1941,12 +1941,12 @@ html.dark-theme .post-item blockquote.text-post-media {
 }
 
 .single-post-banner__back:hover {
-    background: var(--surface-hover, rgba(0,0,0,0.06));
+    background: var(--surface-hover, rgba(0, 0, 0, 0.06));
     color: var(--text-primary, #111827);
 }
 
 .dark-theme .single-post-banner__back:hover {
-    background: rgba(255,255,255,0.08);
+    background: rgba(255, 255, 255, 0.08);
     color: #f3f4f6;
 }
 
@@ -1958,10 +1958,10 @@ html.dark-theme .post-item blockquote.text-post-media {
     text-transform: uppercase;
     padding: 3px 8px;
     border-radius: 99px;
-    background: var(--surface-hover, rgba(0,0,0,0.05));
+    background: var(--surface-hover, rgba(0, 0, 0, 0.05));
 }
 
 .dark-theme .single-post-banner__label {
-    background: rgba(255,255,255,0.07);
+    background: rgba(255, 255, 255, 0.07);
     color: #71717a;
 }

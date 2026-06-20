@@ -1,6 +1,4 @@
 (function () {
-    // ?debug=1 時完全停用 console 過濾，方便開發者除錯。
-    // 仍會在偵測到速率限制時派發 threads:rate-limit 事件，確保退避機制不受影響。
     var debugMode = false;
     try {
         debugMode = new URLSearchParams(window.location.search).get('debug') === '1';

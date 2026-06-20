@@ -138,18 +138,10 @@
             selectedTag = t || '';
         } catch (e) { }
     }
-    /**
-     * copyPermalink(postLink)
-     * 產生並複製單篇貼文的永久連結到剪貼簿。
-     * postLink 是該貼文的 Threads 原始 URL，用它當識別碼，
-     * 不受 config.js 新增、刪除、重排影響。
-     * 若 postLink 為空（舊格式純字串且解析失敗），回退到全域索引。
-     */
     function copyPermalink(postLink) {
         try {
             var u = new URL(window.location.href);
             u.searchParams.set('post', postLink || '');
-            // 保留目前篩選狀態，方便對方看到相同的脈絡
             u.searchParams.delete('page');
             u.searchParams.delete('page_size');
             u.searchParams.delete('random');
@@ -197,7 +189,6 @@
     function updateUrlParams(push) {
         try {
             var u = new URL(window.location.href);
-            // ?post= 由跳轉邏輯在捲動完後用 replaceState 自行清除，這裡不動它
             u.searchParams.set('page', currentPage);
             u.searchParams.set('page_size', pageSize);
             if (isRandomMode && randomSeed) {
@@ -356,7 +347,6 @@
         stats.rateLimitHits++;
         consecutiveErrors++;
         try {
-            // 速率限制觸發時，移除目前正在載入中的 iframe，避免半成品殘留
             var activeIfames = document.querySelectorAll('.post-item.current-loading iframe');
             activeIfames.forEach(function (f) {
                 try { f.remove(); } catch (e) { }
@@ -649,29 +639,12 @@
             setTimeout(fn, 16);
         }
     }
-    /**
-     * isIframeLoadSuccessful(iframeNode)
-     * 判斷 Threads embed iframe 是否真正載入成功。
-     *
-     * 成功的充要條件：
-     *   1. src 屬於允許的 Threads 網域（threads.com）
-     *   2. iframe 的實際渲染高度 >= SUCCESS_HEIGHT_THRESHOLD（預設 200px）
-     *      → Threads embed 渲染完成後高度會擴展到 400px+，失敗頁/空白 iframe 高度極低
-     *
-     * 失敗情況：
-     *   - src 為 chrome-error: / chromewebdata（X-Frame 阻擋）
-     *   - src 屬於 Facebook/Meta 錯誤網域（fb.com、facebook.com 等）
-     *   - 高度過低（iframe 存在但內容未渲染）
-     */
-    var SUCCESS_HEIGHT_THRESHOLD = 200; // px，低於此視為未成功渲染
+    var SUCCESS_HEIGHT_THRESHOLD = 200;
     var FACEBOOK_ERROR_HOSTS = ['facebook.com', 'www.facebook.com', 'fb.com', 'www.fb.com', 'static.xx.fbcdn.net'];
-
     function isIframeLoadSuccessful(iframeNode) {
         try {
             var src = iframeNode.getAttribute('src') || iframeNode.src || '';
-            // chrome-error 或空 src
             if (!src || /chrome-error:|chromewebdata/i.test(src)) return false;
-            // Facebook 錯誤頁網域
             try {
                 var srcHost = new URL(src).hostname.toLowerCase();
                 for (var i = 0; i < FACEBOOK_ERROR_HOSTS.length; i++) {
@@ -680,8 +653,7 @@
                         return false;
                     }
                 }
-            } catch (e) {}
-            // 高度檢查：Threads embed 渲染成功後高度會顯著擴展
+            } catch (e) { }
             var h = iframeNode.offsetHeight || iframeNode.clientHeight || 0;
             if (h > 0 && h < SUCCESS_HEIGHT_THRESHOLD) {
                 console.warn('[iframe] 高度過低 (' + h + 'px)，視為未成功渲染');
@@ -692,22 +664,15 @@
             return false;
         }
     }
-
-    /**
-     * waitForIframeHeight(iframeNode, minHeight, timeout)
-     * 等待 iframe 高度達到 minHeight，用 ResizeObserver（或輪詢回退）實作。
-     * 回傳 Promise<boolean>。
-     */
     function waitForIframeHeight(iframeNode, minHeight, timeout) {
         return new Promise(function (resolve) {
             var min = minHeight || SUCCESS_HEIGHT_THRESHOLD;
             var tOut = timeout || 15000;
             var resolved = false;
             var timerId, ro;
-
             function cleanup() {
                 if (timerId) clearTimeout(timerId);
-                if (ro) { try { ro.disconnect(); } catch(e) {} }
+                if (ro) { try { ro.disconnect(); } catch (e) { } }
             }
             function finish(ok) {
                 if (resolved) return;
@@ -715,13 +680,9 @@
                 cleanup();
                 resolve(ok);
             }
-
-            // 已達高度，直接回傳
             var h = iframeNode.offsetHeight || iframeNode.clientHeight || 0;
             if (h >= min) { finish(true); return; }
-
             timerId = setTimeout(function () { finish(false); }, tOut);
-
             if (window.ResizeObserver) {
                 ro = new ResizeObserver(function () {
                     var h2 = iframeNode.offsetHeight || iframeNode.clientHeight || 0;
@@ -729,7 +690,6 @@
                 });
                 ro.observe(iframeNode);
             } else {
-                // 回退：每 300ms 輪詢一次
                 var poll = setInterval(function () {
                     var h3 = iframeNode.offsetHeight || iframeNode.clientHeight || 0;
                     if (h3 >= min) { clearInterval(poll); finish(true); }
@@ -738,13 +698,6 @@
             }
         });
     }
-
-    /**
-     * loadIframeWithTimeout(blockquote, ms)
-     * 等待 Threads embed.js 在指定 blockquote 內產生 iframe，並監聽其載入結果。
-     * 統一封裝所有 MutationObserver、timeout、chrome-error 偵測邏輯，
-     * 回傳 Promise<boolean>：true = 載入成功，false = 失敗或超時。
-     */
     function loadIframeWithTimeout(blockquote, timeout) {
         return new Promise(function (resolve) {
             var timeoutId, observer, earlyTimeoutId;
@@ -845,15 +798,12 @@
                                 }, { once: true });
                                 iframeNode.addEventListener('load', function () {
                                     var src = iframeNode.getAttribute('src') || iframeNode.src || '';
-                                    // chrome-error 直接失敗
                                     if (/chrome-error:|chromewebdata/i.test(src)) {
                                         console.warn('[iframe] chrome error page detected: ' + src);
                                         markDone(false, 'xframe-deny');
                                         return;
                                     }
-                                    // 先做 src 層級的快速檢查（Facebook 錯誤網域等）
                                     if (!isIframeLoadSuccessful(iframeNode)) {
-                                        // src 本身就是錯誤網域，直接失敗
                                         var badSrc = iframeNode.getAttribute('src') || iframeNode.src || '';
                                         if (badSrc && !/^about:/.test(badSrc)) {
                                             console.warn('[iframe] load 失敗（src 檢查）: ' + badSrc);
@@ -861,8 +811,6 @@
                                             return;
                                         }
                                     }
-                                    // 等待 iframe 高度擴展到 SUCCESS_HEIGHT_THRESHOLD
-                                    // （Threads embed 渲染完才會撐高；Facebook 錯誤頁/空白不會）
                                     waitForIframeHeight(iframeNode, SUCCESS_HEIGHT_THRESHOLD, 12000)
                                         .then(function (heightOk) {
                                             if (!heightOk) {
@@ -958,19 +906,14 @@
             if (!Array.isArray(posts)) return;
         } catch (e) { return; }
         var CHUNK_APPEND_SIZE = 20;
-        // 在 readUrlState（會被 updateUrlParams/renderPage 覆寫 URL）之前，
-        // 先把 ?post= 參數讀出來暫存。之後跳轉邏輯直接用這個變數，
-        // 不再重新讀 URL，避免被 renderPage 的 updateUrlParams 提前清掉。
-        // initialPostTarget：儲存 ?post= 的原始字串值（postLink URL 或舊格式索引數字字串）
-        // 必須在 readUrlState / renderPage 之前讀取，否則 updateUrlParams 會覆寫 URL。
         var initialPostTarget = null;
         try {
             var _initParams = new URLSearchParams(window.location.search);
             var _postVal = _initParams.get('post');
             if (_postVal !== null && _postVal !== '') {
-                initialPostTarget = _postVal; // 保留原始字串，不 parseInt
+                initialPostTarget = _postVal;
             }
-        } catch (e) {}
+        } catch (e) { }
         readUrlState();
         normalizedPosts = posts.map(normalizePost);
         var themeToggleBtn = document.getElementById('theme-toggle');
@@ -1090,7 +1033,6 @@
             try {
                 isExpanded = sessionStorage.getItem('tags_expanded') === 'true';
             } catch (e) { }
-
             if (selectedTag) {
                 var selectedIndex = sortedTags.findIndex(function (t) {
                     return t.toLowerCase() === selectedTag.toLowerCase();
@@ -1117,7 +1059,6 @@
                 }
             });
             tagsContainer.appendChild(allPill);
-
             sortedTags.forEach(function (tag, index) {
                 var originalTag = tag;
                 for (var i = 0; i < normalizedPosts.length; i++) {
@@ -1150,14 +1091,12 @@
                         window.location.search = search;
                     }
                 });
-
                 if (index >= limit && !isExpanded) {
                     pill.style.display = 'none';
                     pill.classList.add('tag-pill--hidden');
                 }
                 tagsContainer.appendChild(pill);
             });
-
             if (sortedTags.length > limit) {
                 var toggleBtn = document.createElement('button');
                 toggleBtn.className = 'tag-pill tag-pill--toggle';
@@ -1208,8 +1147,6 @@
                         embedWithTheme = embedWithTheme.replace('<blockquote ', '<blockquote data-theme="' + targetTheme + '" ');
                     }
                     item.innerHTML = embedWithTheme;
-                    // 分享單篇貼文 Permalink 按鈕
-                    // 改用 postLink（Threads 原始 URL）當識別碼，不受排序/新增/刪除影響
                     (function (capturedPostLink, capturedGlobalIdx, capturedItem) {
                         var shareBtn = document.createElement('button');
                         shareBtn.className = 'permalink-btn';
@@ -1218,7 +1155,6 @@
                         shareBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>';
                         shareBtn.addEventListener('click', function (e) {
                             e.stopPropagation();
-                            // 優先用 postLink；若為空（純字串舊格式解析失敗）回退到全域索引
                             copyPermalink(capturedPostLink || String(capturedGlobalIdx));
                             showCopiedTooltip(shareBtn);
                         });
@@ -1295,7 +1231,7 @@
             function navigateTo(pageNum, size) {
                 try {
                     var u = new URL(window.location.href);
-                    u.searchParams.delete('post'); // 換頁不應保留 ?post=
+                    u.searchParams.delete('post');
                     u.searchParams.set('page', pageNum);
                     u.searchParams.set('page_size', typeof size !== 'undefined' ? size : pageSize);
                     if (isRandomMode && randomSeed) {
@@ -1476,18 +1412,10 @@
                 });
             });
         };
-        // ?post=<postLink> 單篇模式：在 renderPage 之前判斷，
-        // 若有 ?post= 則完全跳過 renderPage，直接渲染單篇，
-        // 避免 renderPage → updateUrlParams 把 ?post= 覆寫掉。
         if (initialPostTarget !== null) {
             (function () {
                 try {
                     var postVal = initialPostTarget;
-
-                    // 找出目標貼文在 activePosts 中的全域索引。
-                    // 優先以 postLink（Threads 原始 URL）比對，這是最可靠的識別碼，
-                    // 不受貼文新增、刪除、重排或隨機排序影響；
-                    // 只有在 postLink 找不到時，才回退到舊格式的數字索引。
                     var targetGlobalIdx = -1;
                     for (var _fi = 0; _fi < activePosts.length; _fi++) {
                         if (activePosts[_fi].postLink && activePosts[_fi].postLink === postVal) {
@@ -1495,7 +1423,6 @@
                             break;
                         }
                     }
-
                     if (targetGlobalIdx === -1) {
                         var parsedAsIdx = parseInt(postVal, 10);
                         var isNumeric = String(parsedAsIdx) === postVal && Number.isFinite(parsedAsIdx) && parsedAsIdx >= 0;
@@ -1503,22 +1430,15 @@
                             targetGlobalIdx = parsedAsIdx;
                         }
                     }
-
                     if (targetGlobalIdx < 0 || targetGlobalIdx >= activePosts.length) {
-                        // 找不到貼文，回退到正常模式
                         ensurePageSizeControls();
                         ensureRandomControls();
                         updatePaginationControls();
                         renderPage(currentPage, { push: false });
                         return;
                     }
-
                     var targetPost = activePosts[targetGlobalIdx];
-
-                    // ── 單篇模式：隱藏所有 UI chrome ──────────────────────────
                     document.documentElement.classList.add('single-post-mode');
-
-                    // ── 只渲染這一篇 ───────────────────────────────────────────
                     container.innerHTML = '';
                     var singleItem = document.createElement('div');
                     singleItem.className = 'post-item post-item--single';
@@ -1531,8 +1451,6 @@
                     }
                     singleItem.innerHTML = embedCode;
                     container.appendChild(singleItem);
-
-                    // ── 插入「回到完整列表」banner ─────────────────────────────
                     var backBanner = document.createElement('div');
                     backBanner.className = 'single-post-banner';
                     var backUrl = new URL(window.location.href);
@@ -1546,8 +1464,6 @@
                         '</a>' +
                         '<span class="single-post-banner__label">單篇預覽</span>';
                     container.insertBefore(backBanner, singleItem);
-
-                    // ── 啟動 embed 載入 ────────────────────────────────────────
                     requestAnimationFrame(function () {
                         var bq = container.querySelector('blockquote.text-post-media');
                         if (bq) {
@@ -1556,10 +1472,7 @@
                             processSingleEmbed();
                         }
                     });
-
-                    // URL 保留 ?post= 方便分享，不做 replaceState
                 } catch (e) {
-                    // 發生例外時回退到正常模式
                     ensurePageSizeControls();
                     ensureRandomControls();
                     updatePaginationControls();
@@ -1572,7 +1485,6 @@
             updatePaginationControls();
             renderPage(currentPage, { push: false });
         }
-
         window.addEventListener('popstate', function () {
             try {
                 readUrlState();
