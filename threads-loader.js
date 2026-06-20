@@ -4,6 +4,8 @@
     } else {
         init();
     }
+    var container = null;
+    var loadedCount = 0;
     var allBlockquotes = [];
     var currentIndex = 0;
     var processing = false;
@@ -102,10 +104,6 @@
         if (currentPage < 1) {
             currentPage = 1;
         }
-    }
-    function seededRandom(seed) {
-        var x = Math.sin(seed) * 10000;
-        return x - Math.floor(x);
     }
     function shuffleWithSeed(array, seed) {
         var m = array.length, t, i;
@@ -358,15 +356,10 @@
         stats.rateLimitHits++;
         consecutiveErrors++;
         try {
+            // 速率限制觸發時，移除目前正在載入中的 iframe，避免半成品殘留
             var activeIfames = document.querySelectorAll('.post-item.current-loading iframe');
             activeIfames.forEach(function (f) {
                 try { f.remove(); } catch (e) { }
-            });
-            visibleQueue.forEach(function (bq) {
-                try {
-                    var iframes = (bq && bq.parentNode) ? bq.parentNode.querySelectorAll('iframe') : [];
-                    iframes.forEach(function (f) { try { f.remove(); } catch (e) { } });
-                } catch (e) { }
             });
         } catch (e) { }
         var backoffTime = typeof overrideBackoffMs === 'number' && overrideBackoffMs > 0 ?
@@ -485,26 +478,6 @@
             return originalXHRSend.apply(this, arguments);
         };
     })();
-    function loadEmbedScript(callback) {
-        var script = document.createElement('script');
-        script.async = true;
-        script.src = 'https://www.threads.com/embed.js';
-        script.onerror = function () {
-            console.error('[錯誤] Threads embed script 載入失敗');
-            stats.failed++;
-        };
-        script.onload = function () {
-            embedScriptLoaded = true;
-            console.log('[成功] Threads embed script 載入成功');
-            if (callback) callback();
-        };
-        document.body.appendChild(script);
-    }
-    function addLoadingIndicator(blockquote) {
-        return null;
-    }
-    function removeLoadingIndicator(indicator) {
-    }
     function markBlockquoteFailed(blockquote, reason, skipRetry) {
         if (!blockquote) return;
         var failureReason = reason || 'unknown';
@@ -707,7 +680,6 @@
             setTimeout(fn, 16);
         }
     }
-    function triggerRelayouts() { }
     /**
      * isIframeLoadSuccessful(iframeNode)
      * 判斷 Threads embed iframe 是否真正載入成功。
@@ -1011,7 +983,7 @@
         });
     }
     function init() {
-        var container = document.getElementById('posts-container');
+        container = document.getElementById('posts-container');
         if (!container) return;
         try {
             if (!Array.isArray(posts)) return;
@@ -1241,19 +1213,6 @@
                 tagsContainer.appendChild(toggleBtn);
             }
         }
-        function updateTagPillActiveState() {
-            var pills = document.querySelectorAll('.tag-pill');
-            pills.forEach(function (pill) {
-                if (pill.textContent === '全部貼文') {
-                    if (!selectedTag) pill.classList.add('active');
-                    else pill.classList.remove('active');
-                } else if (selectedTag && pill.dataset.tag === selectedTag.toLowerCase()) {
-                    pill.classList.add('active');
-                } else {
-                    pill.classList.remove('active');
-                }
-            });
-        }
         renderTagsContainer();
         applyFiltersAndSorting();
         function appendPostsInChunks(postsToAppend, done) {
@@ -1320,10 +1279,6 @@
             var start = (p - 1) * pageSize;
             var end = Math.min(start + pageSize, activePosts.length);
             return activePosts.slice(start, end);
-        }
-        function parseIntSafe(v, fallback) {
-            var n = parseInt(v, 10);
-            return (Number.isFinite(n) && n > 0) ? n : fallback;
         }
         function clearPageState() {
             processing = false;
@@ -1560,19 +1515,23 @@
                 try {
                     var postVal = initialPostTarget;
 
-                    // 找出目標貼文在 activePosts 中的全域索引
+                    // 找出目標貼文在 activePosts 中的全域索引。
+                    // 優先以 postLink（Threads 原始 URL）比對，這是最可靠的識別碼，
+                    // 不受貼文新增、刪除、重排或隨機排序影響；
+                    // 只有在 postLink 找不到時，才回退到舊格式的數字索引。
                     var targetGlobalIdx = -1;
-                    var parsedAsIdx = parseInt(postVal, 10);
-                    var isNumeric = String(parsedAsIdx) === postVal && Number.isFinite(parsedAsIdx) && parsedAsIdx >= 0;
+                    for (var _fi = 0; _fi < activePosts.length; _fi++) {
+                        if (activePosts[_fi].postLink && activePosts[_fi].postLink === postVal) {
+                            targetGlobalIdx = _fi;
+                            break;
+                        }
+                    }
 
-                    if (isNumeric) {
-                        targetGlobalIdx = parsedAsIdx;
-                    } else {
-                        for (var _fi = 0; _fi < activePosts.length; _fi++) {
-                            if (activePosts[_fi].postLink === postVal) {
-                                targetGlobalIdx = _fi;
-                                break;
-                            }
+                    if (targetGlobalIdx === -1) {
+                        var parsedAsIdx = parseInt(postVal, 10);
+                        var isNumeric = String(parsedAsIdx) === postVal && Number.isFinite(parsedAsIdx) && parsedAsIdx >= 0;
+                        if (isNumeric) {
+                            targetGlobalIdx = parsedAsIdx;
                         }
                     }
 
