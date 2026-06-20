@@ -8,7 +8,7 @@
 - **手動深色/淺色主題 (Manual Dark / Light Mode)**：控制列提供主題切換按鈕，點擊即可在深色與淺色模式之間手動切換，並將偏好記錄至 `localStorage` 以便下次造訪時延續設定。另外，特別優化了深色模式下分頁按鈕與隨機排序按鈕啟動狀態的對比度，提升視覺可讀性。
 - **版面配置切換 (Layout Toggle)**：控制列提供版面按鈕，可在「瀑布流 (Masonry Grid)」與「單欄列表 (List)」兩種版面間自由切換，偏好同樣儲存於 `localStorage`。
 - **自動限流與退避策略 (Rate Limit Handling)**：全域攔截 HTTP 429 錯誤與 Threads 腳本錯誤，若觸發速率限制會自動呈現提示，暫停載入貼文，並透過動態計算的回避時間 (Backoff) 自動恢復。
-- **智慧分頁與效能優化 (Smart Pagination)**：支援 URL 狀態同步的分頁功能 (支援 5, 10, 25, 50 筆等自訂選項)，切換每頁顯示貼文數量時會重新整理（刷新）頁面以確保頁面狀態一致。透過 `requestIdleCallback` 以分塊 (chunks) 方式渲染 DOM，避免阻塞主執行緒 (Main Thread) 導致畫面卡頓。
+- **智慧分頁與效能優化 (Smart Pagination)**：支援 URL 狀態同步的分頁功能 (預設提供 1, 3, 5, 10, 25 筆等自訂選項)，切換每頁顯示貼文數量時會重新整理（刷新）頁面以確保頁面狀態一致。透過 `requestIdleCallback` 以分塊 (chunks) 方式渲染 DOM，避免阻塞主執行緒 (Main Thread) 導致畫面卡頓。
 - **隨機排序與種子洗牌 (Random Sorting & Seeded Shuffle)**：支援一鍵切換隨機排序與預設排序。在隨機排序模式下，使用基於 URL 參數的隨機排序種子 (Seed) 以確保分頁時的文章順序一致，並提供「重新洗牌」功能以重新整理隨機排序順序。
 - **PWA (Progressive Web App) 支援**：支援離線存取功能，利用 Service Worker 快取核心靜態資源（包括 HTML、CSS、JS、設定檔與圖示），並提供完整的 Manifest 設定檔，支援應用程式安裝與獨立視窗運行。
 - **高強度的 Iframe 監控**：使用 `MutationObserver` 嚴格監控由 `embed.js` 生成的 iframes，能自動捕捉 `X-Frame-Options` 阻擋或瀏覽器錯誤畫面，並執行優雅降級。
@@ -53,9 +53,15 @@ cd Threads-Featured-Posts
 
 ```javascript
 // config.js
-const PAGE_SIZE_OPTIONS = [5, 10, 25, 50]; // 每頁顯示數選項
+const LOAD_DELAY = 4000;                   // 貼文 iframe 載入的間隔延遲 (毫秒)
+const BATCH_SIZE = 3;                      // 保留參數
+const IFRAME_TIMEOUT = 20000;             // 單個 iframe 載入的主超時 (毫秒)
+const MIN_IFRAME_TIMEOUT = 8000;          // iframe 載入的最小等待時間 (毫秒)
+const RATE_LIMIT_BACKOFF = 60000;        // 遭遇速率限制時的基礎退避時間 (毫秒)
+const MAX_DELAY = 60000;                  // 動態延遲的上限 (毫秒)
+const MIN_DELAY_BETWEEN_REQUESTS = 2500; // 兩次請求間的最小間隔 (毫秒)
+const PAGE_SIZE_OPTIONS = [1, 3, 5, 10, 25]; // 每頁顯示數選項
 const PAGE_SIZE = 10;                     // 預設每頁顯示篇數
-const LOAD_DELAY = 1000;                  // 貼文 iframe 載入的間隔延遲 (毫秒)
 
 const posts = [
     '<blockquote class="text-post-media" data-url="..."><a href="...">...</a></blockquote>',
@@ -123,6 +129,7 @@ bunx http-server -p 3000
 |------|------|------|
 | `page` | 目前顯示的頁碼 | `?page=2` |
 | `page_size` | 每頁顯示的貼文數量，須為 `PAGE_SIZE_OPTIONS` 內的值 | `?page_size=10` |
+| `post` | 單篇預覽模式，值為貼文的 `postLink`（Threads 原始 URL），只顯示該單篇 | `?post=https://www.threads.com/@user/post/xxx` |
 | `random` | 隨機排序的種子值（通常為時間戳記），存在時開啟隨機排序模式 | `?random=1717750000000` |
 | `search` | 搜尋關鍵字，對作者、內文與標籤進行模糊比對 | `?search=AI` |
 | `tag` | 精確標籤篩選，與標籤篩選列同步 | `?tag=設計` |
@@ -169,3 +176,6 @@ bunx http-server -p 3000
 
 ### Console 仍出現錯誤訊息？
 **解決方案**：請確認 `console-filter.js` 在 `index.html` 的 `<head>` 區段中是第一個被載入的 `<script>`，確保它能盡早攔截全域的錯誤拋出。
+
+### 除錯時想看完整 Console 訊息？
+**解決方案**：在網址加上 `?debug=1`（例如 `http://localhost:3000/?debug=1`）即可暫時停用 `console-filter.js` 的雜訊過濾，顯示所有原始錯誤與警告。此時速率限制的退避機制仍正常運作（事件照常派發）。
