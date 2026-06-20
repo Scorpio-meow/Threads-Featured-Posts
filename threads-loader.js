@@ -578,39 +578,10 @@
         stats.total++;
         var startTime = Date.now();
         var attemptFinished = false;
-        var detachedQueueFragment = null;
         blockquote.dataset.embedLoading = 'true';
         var postItem = blockquote.closest('.post-item');
         if (postItem) {
             postItem.classList.add('current-loading');
-        }
-        function detachFuturePostItems() {
-            try {
-                if (!container || !postItem || !postItem.parentNode) return;
-                var postItems = Array.prototype.slice.call(container.children).filter(function (child) {
-                    return child && child.classList && child.classList.contains('post-item');
-                });
-                var currentPostIndex = -1;
-                for (var i = 0; i < postItems.length; i++) {
-                    if (postItems[i] === postItem) {
-                        currentPostIndex = i;
-                        break;
-                    }
-                }
-                if (currentPostIndex === -1 || currentPostIndex >= postItems.length - 1) return;
-                detachedQueueFragment = document.createDocumentFragment();
-                for (var j = currentPostIndex + 1; j < postItems.length; j++) {
-                    detachedQueueFragment.appendChild(postItems[j]);
-                }
-            } catch (e) { }
-        }
-        function restoreFuturePostItems() {
-            try {
-                if (detachedQueueFragment && detachedQueueFragment.childNodes.length > 0 && container) {
-                    container.appendChild(detachedQueueFragment);
-                }
-            } catch (e) { }
-            detachedQueueFragment = null;
         }
         function cleanupLoadingState() {
             try {
@@ -625,7 +596,6 @@
         function finishAttempt(success, reason) {
             if (attemptFinished) return;
             attemptFinished = true;
-            restoreFuturePostItems();
             cleanupLoadingState();
             if (success) {
                 blockquote.dataset.embedLoaded = 'true';
@@ -643,7 +613,6 @@
                 setTimeout(processSingleEmbed, withJitter(currentDelay));
             }
         }
-        detachFuturePostItems();
         var script = document.createElement('script');
         script.async = true;
         script.src = 'https://www.threads.com/embed.js';
