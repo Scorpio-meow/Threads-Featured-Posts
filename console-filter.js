@@ -3,7 +3,6 @@
     try {
         debugMode = new URLSearchParams(window.location.search).get('debug') === '1';
     } catch (e) { }
-
     var originalError = console.error;
     var originalWarn = console.warn;
     console.error = function () {
