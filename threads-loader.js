@@ -14,6 +14,13 @@
     var allBlockquotes = [];
     var currentIndex = 0;
     var processing = false;
+    // 同時在處理中的篇數（小批次併發），取代過去「一次只處理一篇」的序列鎖。
+    var inFlight = 0;
+    // 併發上限：取 config.js 的 BATCH_SIZE，夾在 1~4 之間（過多會觸發 Threads 500 限流）。
+    var EMBED_CONCURRENCY = (function () {
+        var n = (typeof BATCH_SIZE !== 'undefined' && BATCH_SIZE > 0) ? BATCH_SIZE : 3;
+        return Math.max(1, Math.min(4, n));
+    })();
     var paused = false;
     var currentDelay = LOAD_DELAY;
     var rateLimitDetected = false;
@@ -349,6 +356,7 @@
         rateLimitDetected = true;
         paused = true;
         processing = false;
+        inFlight = 0;
         stats.rateLimitHits++;
         consecutiveErrors++;
         try {
@@ -374,7 +382,7 @@
                     currentDelay = Math.max(LOAD_DELAY, currentDelay / 1.5);
                 }
                 console.log('[恢復] 速率限制解除,恢復載入,延遲: ' + (currentDelay / 1000) + ' 秒');
-                processSingleEmbed();
+                pumpEmbeds();
                 hideRateLimitBanner();
             });
         }, backoffTime);
@@ -554,30 +562,37 @@
         } catch (e) { }
     }
     function processSingleEmbed() {
-        if (processing || paused || rateLimitDetected) {
+        if (paused || rateLimitDetected) {
+            return;
+        }
+        // 已達併發上限：先不再啟動新的一篇，待有篇完成後由 finishAttempt 補位。
+        if (inFlight >= EMBED_CONCURRENCY) {
             return;
         }
         if (currentIndex >= allBlockquotes.length) {
-            if (stats.total > 0) {
+            // 所有篇都已派發完畢，且沒有正在處理中的篇 → 印出統計。
+            if (inFlight === 0 && stats.total > 0) {
                 logStats();
             }
             return;
         }
+        // 篇與篇之間用較短的錯開間隔（stagger），靠併發提速，
+        // 不再讓每篇都等滿 LOAD_DELAY。仍保留最小間隔避免瞬間爆量。
         var now = Date.now();
         var timeSinceLastRequest = now - lastRequestTime;
-        var minDelay = typeof MIN_DELAY_BETWEEN_REQUESTS !== 'undefined' ? MIN_DELAY_BETWEEN_REQUESTS : 2000;
+        var minDelay = typeof EMBED_STAGGER_DELAY !== 'undefined' ? EMBED_STAGGER_DELAY : 700;
         if (lastRequestTime > 0 && timeSinceLastRequest < minDelay) {
-            setTimeout(processSingleEmbed, withJitter(minDelay - timeSinceLastRequest));
+            setTimeout(pumpEmbeds, withJitter(minDelay - timeSinceLastRequest));
             return;
         }
         var blockquote = allBlockquotes[currentIndex];
         if (!blockquote || blockquote.dataset.embedLoaded === 'true' || blockquote.dataset.embedLoading === 'true' || blockquote.dataset.embedFailed) {
             currentIndex++;
-            processSingleEmbed();
+            pumpEmbeds();
             return;
         }
         currentIndex++;
-        processing = true;
+        inFlight++;
         lastRequestTime = Date.now();
         stats.total++;
         var startTime = Date.now();
@@ -626,9 +641,10 @@
                 markBlockquoteFailed(blockquote, reason || 'timeout', true);
                 stats.failed++;
             }
-            processing = false;
+            inFlight = Math.max(0, inFlight - 1);
             if (!paused && !rateLimitDetected) {
-                setTimeout(processSingleEmbed, withJitter(currentDelay));
+                // 補位：有篇完成釋出額度，立即嘗試啟動下一篇（以較短間隔）。
+                setTimeout(pumpEmbeds, withJitter(typeof EMBED_STAGGER_DELAY !== 'undefined' ? EMBED_STAGGER_DELAY : 700));
             }
         }
         // 觸發單篇嵌入：首次載入 embed.js，之後改呼叫 process()。
@@ -684,6 +700,19 @@
             console.warn('[錯誤] Threads embed 初始化失敗:', error);
             finishAttempt(false, 'process-error');
             return;
+        }
+    }
+    // pumpEmbeds：排程器入口。負責「把併發填滿到上限」：
+    // 每次只啟動一篇（processSingleEmbed 內部會 inFlight++），
+    // 若還有額度則以 stagger 間隔排下一次 pump，避免双重排程造成併發超標。
+    function pumpEmbeds() {
+        if (paused || rateLimitDetected) return;
+        var before = inFlight;
+        processSingleEmbed();
+        // 若本次成功啟動了一篇（inFlight 上升）且仍有額度並還有待處理篇，
+        // 以 stagger 間隔繼續填滿下一篇。
+        if (inFlight > before && inFlight < EMBED_CONCURRENCY && currentIndex < allBlockquotes.length) {
+            setTimeout(pumpEmbeds, withJitter(typeof EMBED_STAGGER_DELAY !== 'undefined' ? EMBED_STAGGER_DELAY : 700));
         }
     }
     function scheduleIdle(fn) {
@@ -1243,6 +1272,7 @@
         }
         function clearPageState() {
             processing = false;
+            inFlight = 0;
             paused = false;
             rateLimitDetected = false;
             consecutiveErrors = 0;
@@ -1474,7 +1504,7 @@
                     try { updateUrlParams(push); } catch (e) { }
                     if (allBlockquotes.length > 0) {
                         try { currentIndex = 0; } catch (e) { }
-                        processSingleEmbed();
+                        pumpEmbeds();
                     }
                     ensurePageSizeControls();
                     ensureRandomControls();
@@ -1538,7 +1568,7 @@
                         if (bq) {
                             allBlockquotes = [bq];
                             currentIndex = 0;
-                            processSingleEmbed();
+                            pumpEmbeds();
                         }
                     });
                 } catch (e) {
