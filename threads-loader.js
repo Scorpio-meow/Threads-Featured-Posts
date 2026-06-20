@@ -6,6 +6,11 @@
     }
     var container = null;
     var loadedCount = 0;
+    // embed.js 只需載入一次；之後改呼叫 window.instgrm.Embeds.process()
+    // 逐篇觸發嵌入（process 會掃描當下帶 text-post-media class 的 blockquote，
+    // 因為我們一次只還原一篇的 class，所以每次只會處理該篇）。
+    var embedScriptLoading = false;
+    var embedScriptReady = false;
     var allBlockquotes = [];
     var currentIndex = 0;
     var processing = false;
@@ -481,6 +486,15 @@
             var postItem = blockquote.closest('.post-item');
             if (postItem) {
                 postItem.classList.remove('current-loading');
+                // 移除 embed.js 產生的空白/崩潰 iframe（高度過低），
+                // 避免它們留在畫面上佔位，騰出空間給 fallback 連結。
+                try {
+                    var deadFrames = postItem.querySelectorAll('iframe');
+                    deadFrames.forEach(function (fr) {
+                        var fh = fr.offsetHeight || fr.clientHeight || 0;
+                        if (fh < 50) { try { fr.remove(); } catch (e) { } }
+                    });
+                } catch (e) { }
             }
         } catch (e) { }
         try {
@@ -568,6 +582,14 @@
         stats.total++;
         var startTime = Date.now();
         var attemptFinished = false;
+        // 還原此 blockquote 的 text-post-media class，讓接下來插入的 embed.js
+        // 只會嵌入「這一篇」，避免一次處理整頁造成 Threads 500 限流。
+        try {
+            if (blockquote.dataset.embedPending) {
+                blockquote.classList.add('text-post-media');
+                delete blockquote.dataset.embedPending;
+            }
+        } catch (e) { }
         blockquote.dataset.embedLoading = 'true';
         var postItem = blockquote.closest('.post-item');
         if (postItem) {
@@ -580,6 +602,12 @@
                 }
                 if (blockquote.dataset.embedLoading) {
                     delete blockquote.dataset.embedLoading;
+                }
+                // 無論成敗，處理完畢後移除 text-post-media class，
+                // 確保「同時最多只有一篇帶 class」，避免失敗篇的
+                // class 殘留而被下一次 process() 重複掃描、造成並發上升。
+                if (blockquote.classList && blockquote.classList.contains('text-post-media')) {
+                    blockquote.classList.remove('text-post-media');
                 }
             } catch (e) { }
         }
@@ -603,28 +631,56 @@
                 setTimeout(processSingleEmbed, withJitter(currentDelay));
             }
         }
-        var script = document.createElement('script');
-        script.async = true;
-        script.src = 'https://www.threads.com/embed.js';
-        script.onload = function () {
+        // 觸發單篇嵌入：首次載入 embed.js，之後改呼叫 process()。
+        function triggerEmbed() {
             try {
-                if (script.parentNode) script.parentNode.removeChild(script);
-            } catch (e) { }
-        };
-        script.onerror = function () {
-            try {
-                if (script.parentNode) script.parentNode.removeChild(script);
-            } catch (e) { }
-            console.warn('[錯誤] Threads embed script 重新插入失敗');
-            finishAttempt(false, 'process-error');
-        };
+                if (window.instgrm && window.instgrm.Embeds && typeof window.instgrm.Embeds.process === 'function') {
+                    window.instgrm.Embeds.process();
+                } else {
+                    // embed.js 尚未就緒（理論上不應發生），稍後重試一次
+                    setTimeout(function () {
+                        try {
+                            if (window.instgrm && window.instgrm.Embeds) window.instgrm.Embeds.process();
+                        } catch (e) { }
+                    }, 500);
+                }
+            } catch (e) {
+                console.warn('[錯誤] 呼叫 embed process 失敗:', e);
+            }
+        }
         try {
             loadIframeWithTimeout(blockquote, typeof IFRAME_TIMEOUT !== 'undefined' ? IFRAME_TIMEOUT : 30000)
                 .then(function (success) {
                     finishAttempt(!!success, success ? null : 'timeout');
                 });
-            document.body.appendChild(script);
+
+            if (embedScriptReady) {
+                // embed.js 已就緒 → 直接 process 當前這一篇
+                triggerEmbed();
+            } else if (!embedScriptLoading) {
+                // 首次：載入 embed.js（載入完成會自動掃描當下唯一帶 class 的這篇）
+                embedScriptLoading = true;
+                var script = document.createElement('script');
+                script.async = true;
+                script.src = 'https://www.threads.com/embed.js';
+                script.onload = function () {
+                    embedScriptReady = true;
+                    // 保險：若 onload 時 instgrm 已就緒但未自動處理，主動 process 一次
+                    triggerEmbed();
+                };
+                script.onerror = function () {
+                    embedScriptLoading = false;
+                    try { if (script.parentNode) script.parentNode.removeChild(script); } catch (e) { }
+                    console.warn('[錯誤] Threads embed.js 載入失敗');
+                    finishAttempt(false, 'process-error');
+                };
+                document.body.appendChild(script);
+            } else {
+                // embed.js 正在載入中（尚未 ready）：稍候 process
+                setTimeout(triggerEmbed, 600);
+            }
         } catch (error) {
+            embedScriptLoading = false;
             console.warn('[錯誤] Threads embed 初始化失敗:', error);
             finishAttempt(false, 'process-error');
             return;
@@ -1398,6 +1454,19 @@
                 requestAnimationFrame(function () {
                     var blockquotes = container.querySelectorAll('blockquote.text-post-media');
                     allBlockquotes = Array.prototype.slice.call(blockquotes);
+                    // 防止 embed.js 一次掃描整頁所有 blockquote 而同時對 Threads
+                    // 發出大量 embed 請求（會觸發 Threads 端 500 限流）。
+                    // 做法：先移除所有 blockquote 的 text-post-media class（embed.js
+                    // 以此 class 辨識待嵌入目標），改用 data 屬性暫存；
+                    // 待 processSingleEmbed 輪到某篇時，才把該篇的 class 還原並觸發嵌入。
+                    allBlockquotes.forEach(function (bq) {
+                        try {
+                            if (bq.classList.contains('text-post-media')) {
+                                bq.classList.remove('text-post-media');
+                                bq.dataset.embedPending = 'true';
+                            }
+                        } catch (e) { }
+                    });
                     try { loadedCount = container.querySelectorAll('blockquote[data-embed-loaded="true"]').length || 0; } catch (e) { loadedCount = 0; }
                     totalPages = Math.max(1, Math.ceil(activePosts.length / pageSize));
                     currentIndex = 0;
