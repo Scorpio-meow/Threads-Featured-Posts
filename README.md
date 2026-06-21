@@ -128,15 +128,19 @@ Threads 官方嵌入腳本在短時間內處理大量貼文請求時，會對用
 ### 5. PWA 與 Service Worker 快取機制
 
 專案具備完整的漸進式網頁應用程式 (PWA) 特性，支援離線快取與本地快取更新比對：
-- **動態快取版本雜湊 (Cache Versioning)**：在 sw.js 安裝階段，會透過 getVersionHash 函式發送 fetch 請求讀取核心檔案 (index.html, styles.css, threads-loader.js, config.js, console-filter.js, manifest.json)，將其文字內容合併後通過 djb2Hash 雜湊演算法計算出一個唯一的 16 進位內容特徵值，作為當前的快取快照版本號。這意味著開發者只要修改任何一個核心檔案，快取雜湊就會自動改變，觸發 Service Worker 的啟用階段以清理舊版本的快取快照。
+- **動態快取版本雜湊 (Cache Versioning)**：在 sw.js 安裝階段，會透過 getVersionHash 函式發送 fetch 請求讀取核心檔案 (index.html, styles.css, threads-loader.js, config.js, console-filter.js, manifest.json)，將其文字內容合併後通過 djb2Hash 雜湊演算法計算出一個唯一的 16 進位內容特徵值。搭配全域結構版本號 (SW_SCHEMA_VERSION，預設為 '3') 組合成快取名稱 `${BASE_CACHE_PREFIX}-v${SW_SCHEMA_VERSION}-${hash}`，作為當前的快取快照版本號。這代表開發者只要修改任何一個核心檔案，快取雜湊就會自動改變，觸發 Service Worker 的啟用階段以清理舊版本的快取快照。
+- **快取名稱持久化 (Meta Cache Tracking)**：在 sw.js 中，使用獨立的 `threads-featured-posts-meta` 快取儲存當前活躍的快取區域名稱。此機制確保了快取寫入與讀取時的命名一致性，並在更新快取時避免資源讀取衝突。
 - **Network-First 快取原則**：對 HTML、CSS 與 JS 等核心檔案採用 Network-First 策略，優先獲取最新網路資源，若離線或網路連線失敗，則自動讀取快取中的備用檔案。
 - **快取清理**：在 activate 階段，Service Worker 會自動檢查並清理非當前活躍快照版本的舊快取檔案，避免佔用用戶端多餘的快取空間。
 
 ### 6. Console 雜訊過濾器 (console-filter.js)
 
 Threads 官方嵌入檔案 embed.js 在執行期間會拋出大量關於跨網域 postMessage 的安全警告以及 CDN 資源載入警告。
-- **靜音機制**：在 index.html 的 head 區段第一順位載入 console-filter.js。透過複寫 window.console.error 與 window.console.warn，使用正規表達式篩選出無關的安全警告或 cross-origin 警告並將其過濾。
-- **自訂事件轉換**：如果攔截到的錯誤訊息中包含 429 速率限制或 X-Frame-Options deny 阻擋，過濾器會主動向全域派發自訂事件 threads:rate-limit 或 threads:xframe-block，交由核心邏輯 threads-loader.js 進行退避與降級處理。
+- **靜音機制**：在 index.html 的 head 區段第一順位載入 console-filter.js。透過複寫 window.console.error 與 window.console.warn，使用正規表達式篩選出無關的安全警告或跨網域警告並將其過濾。過濾規則包含：
+  - `https?:\/\/[^\/]*cdninstagram\.com.*404`：過濾官方嵌入貼文中丟失的 Instagram CDN 媒體資源所導致的 404 錯誤。
+  - `favicon\.ico.*404|404.*favicon\.ico`：過濾網域預設圖示遺失的常見日誌雜訊。
+  - `Failed to load resource.*threads\.com`：過濾 Threads 伺服器偶發的網路阻礙。
+- **自訂事件轉換**：如果攔截到的錯誤訊息中包含 429 速率限制或 X-Frame-Options deny 阻擋（例如 `Refused to display ... in a frame because it set 'X-Frame-Options' to 'deny'`），過濾器會主動向全域派發自訂事件 `threads:rate-limit` 或 `threads:xframe-block`，交由核心邏輯 threads-loader.js 進行退避與降級處理。
 - **除錯模式**：若 URL 查詢參數包含 debug=1，則過濾器會暫停運作，完整顯示所有 Console 的原始警告與日誌。
 
 ---
@@ -155,7 +159,8 @@ Threads 官方嵌入檔案 embed.js 在執行期間會拋出大量關於跨網�
 | `RATE_LIMIT_BACKOFF` | 遭遇限流 (429) 時的基礎退避時間 (毫秒，後續重試將以此基礎進行指數遞增) | `60000` |
 | `MAX_DELAY` | 動態延遲時間的上限 (毫秒) | `60000` |
 | `MIN_DELAY_BETWEEN_REQUESTS` | 相鄰兩次嵌入請求之間的最小安全等待間隔 (毫秒) | `2500` |
-| `PAGE_SIZE_OPTIONS` | 分頁大小控制列提供的每頁顯示筆數選項陣列 | `[1, 3, 5, 10, 25]` |
+| `MAX_VISIBLE_QUEUE` | 限制瀏覽器中同時載入/渲染的貼文卡片最大佇列數量，防止記憶體洩漏與效能下降 | `30` |
+| `PAGE_SIZE_OPTIONS` | 分頁大小控制列提供的每頁顯示筆數選項陣列 | `[1, 3, 5, 10, 25, 50]` |
 | `PAGE_SIZE` | 預設的每頁顯示貼文筆數 | `10` |
 
 ---
