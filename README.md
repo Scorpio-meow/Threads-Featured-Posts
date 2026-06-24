@@ -1,4 +1,4 @@
-# Threads Featured Posts (Threads 精選貼文)
+# Threadfolio
 
 一個精緻、響應式且具備高穩定性的純前端網頁應用程式，專門用來展示及分頁瀏覽 Threads 精選貼文。專案內建強大的速率限制 (Rate Limiting) 退避機制、Iframe 載入錯誤攔截與優雅降級機制，並結合 PWA (Progressive Web App) 離線快取，提供無縫且滑順的使用者體驗。
 
@@ -412,9 +412,3 @@ Threads 官方嵌入檔案 `embed.js` 在執行期間會拋出大量關於跨網
 | `URLSearchParams` | 包裹於 `try/catch` 中，失敗時使用手動字串拼接 |
 | CSS `backdrop-filter` | 同時宣告 `-webkit-backdrop-filter` 與 `backdrop-filter` |
 | CSS `min()` / `clamp()` | 用於響應式尺寸，不支援時瀏覽器自動忽略 |
-
----
-
-## 授權 (License)
-
-MIT License
