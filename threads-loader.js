@@ -1256,7 +1256,7 @@
             emptyState.setAttribute('role', 'status');
             emptyState.innerHTML =
                 '<p class="empty-state__eyebrow">目前沒有內容</p>' +
-                '<h2>Threads 精選貼文尚未載入</h2>' +
+                '<h2>Threads貼文尚未載入</h2>' +
                 '<p>當貼文資料恢復後，這裡會自動轉為卡片式閱讀版面，並保留分頁與即時嵌入體驗。</p>' +
                 '<div class="empty-state__chips"><span>URL 分頁</span><span>即時嵌入</span><span>響應式版面</span></div>';
             target.appendChild(emptyState);
@@ -1277,7 +1277,7 @@
                 try {
                     var emptyPageInfoEls = document.querySelectorAll('.page-info');
                     if (emptyPageInfoEls && emptyPageInfoEls.length > 0) {
-                        emptyPageInfoEls.forEach(function (pi) { pi.textContent = '尚無精選貼文'; });
+                        emptyPageInfoEls.forEach(function (pi) { pi.textContent = '尚無貼文'; });
                     }
                 } catch (e) { }
                 return;

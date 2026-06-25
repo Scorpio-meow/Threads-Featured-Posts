@@ -1,7 +1,7 @@
 {
-  "name": "Threads 精選貼文",
-  "short_name": "Threads 精選",
-  "description": "以更精緻的版面瀏覽 Threads 精選貼文、快速分頁與即時嵌入內容。",
+  "name": "Threads貼文",
+  "short_name": "Threads",
+  "description": "以更精緻的版面瀏覽 Threads貼文、快速分頁與即時嵌入內容。",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#f8f9fa",
