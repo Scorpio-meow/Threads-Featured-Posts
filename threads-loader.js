@@ -62,9 +62,11 @@
                 text = link.textContent || '';
             }
             if (permalink) {
-                var match = permalink.match(/threads\.net\/@([^\/]+)|threads\.com\/@([^\/]+)/);
+                var match = permalink.match(/(?:threads\.net|threads\.com)\/@([^\/]+)/);
                 if (match) {
-                    author = '@' + (match[1] || match[2]);
+                    author = '@' + match[1];
+                } else if (permalink.indexOf('/t/') !== -1) {
+                    author = 'unknown-post';
                 }
             }
             if (text) {
@@ -315,7 +317,7 @@
         startTime: Date.now(),
         loadTimes: []
     };
-    var ALLOWED_THREADS_HOSTS = ['threads.com', 'www.threads.com'];
+    var ALLOWED_THREADS_HOSTS = ['threads.com', 'www.threads.com', 'threads.net', 'www.threads.net'];
     function isHostAllowed(url, allowedHosts) {
         try {
             var parsed = new URL(url, window.location.href);
