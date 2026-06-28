@@ -104,9 +104,15 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const requestUrl = new URL(event.request.url);
   if (requestUrl.origin !== self.location.origin) {
-    event.respondWith(
-      fetch(event.request).catch(() => caches.match(event.request))
-    );
+    event.respondWith((async () => {
+      try {
+        return await fetch(event.request);
+      } catch (err) {
+        const cached = await caches.match(event.request);
+        if (cached) return cached;
+        return Response.error();
+      }
+    })());
     return;
   }
   event.respondWith((async () => {
@@ -141,7 +147,7 @@ self.addEventListener('fetch', (event) => {
       }
       return response;
     } catch (err) {
-      return cached;
+      return Response.error();
     }
   })());
 });
