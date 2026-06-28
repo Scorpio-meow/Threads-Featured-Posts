@@ -509,13 +509,26 @@
                 }
                 var postItemEl = blockquote.closest('.post-item');
                 if (fallbackUrl && postItemEl && !postItemEl.querySelector('.fallback-link')) {
-                    var link = document.createElement('a');
-                    link.href = fallbackUrl;
-                    link.target = '_blank';
-                    link.rel = 'noopener noreferrer';
-                    link.className = 'fallback-link';
-                    link.textContent = '在 Threads 查看此貼文 →';
-                    postItemEl.appendChild(link);
+                    var safeUrl = '';
+                    try {
+                        var parsedUrl = new URL(fallbackUrl, window.location.href);
+                        if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') {
+                            var host = parsedUrl.hostname.toLowerCase();
+                            if (host === 'threads.net' || host.endsWith('.threads.net') ||
+                                host === 'threads.com' || host.endsWith('.threads.com')) {
+                                safeUrl = parsedUrl.toString();
+                            }
+                        }
+                    } catch (e) { }
+                    if (safeUrl) {
+                        var link = document.createElement('a');
+                        link.href = safeUrl;
+                        link.target = '_blank';
+                        link.rel = 'noopener noreferrer';
+                        link.className = 'fallback-link';
+                        link.textContent = '在 Threads 查看此貼文 →';
+                        postItemEl.appendChild(link);
+                    }
                 }
             }
         } catch (e) { }
