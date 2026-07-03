@@ -1574,5 +1574,92 @@
                 if (searchInput) searchInput.value = searchQuery;
             } catch (e) { }
         });
+        (function initFaq() {
+            var faqTrigger = document.getElementById('faq-trigger');
+            var faqModal = document.getElementById('faq-modal');
+            var faqClose = document.getElementById('faq-close');
+            if (!faqTrigger || !faqModal || !faqClose) return;
+            var debugStatusText = document.getElementById('debug-status-text');
+            var debugToggleAction = document.getElementById('debug-toggle-action');
+            var isDebug = false;
+            try {
+                isDebug = new URLSearchParams(window.location.search).get('debug') === '1';
+            } catch (e) { }
+            if (debugStatusText && debugToggleAction) {
+                if (isDebug) {
+                    debugStatusText.textContent = '開啟';
+                    debugStatusText.style.color = 'var(--error)';
+                    debugToggleAction.textContent = '關閉偵錯模式';
+                    debugToggleAction.classList.add('active');
+                } else {
+                    debugStatusText.textContent = '關閉';
+                    debugStatusText.style.color = 'var(--text-secondary)';
+                    debugToggleAction.textContent = '開啟偵錯模式';
+                    debugToggleAction.classList.remove('active');
+                }
+                debugToggleAction.addEventListener('click', function () {
+                    try {
+                        var u = new URL(window.location.href);
+                        if (isDebug) {
+                            u.searchParams.delete('debug');
+                        } else {
+                            u.searchParams.set('debug', '1');
+                        }
+                        window.location.href = u.toString();
+                    } catch (e) {
+                        var search = window.location.search;
+                        if (isDebug) {
+                            search = search.replace(/[?&]debug=1/, '').replace(/^&/, '?');
+                        } else {
+                            search = search ? search + '&debug=1' : '?debug=1';
+                        }
+                        window.location.search = search;
+                    }
+                });
+            }
+            function openFaqModal() {
+                faqModal.classList.add('active');
+                faqModal.setAttribute('aria-hidden', 'false');
+            }
+            function closeFaqModal() {
+                faqModal.classList.remove('active');
+                faqModal.setAttribute('aria-hidden', 'true');
+            }
+            faqTrigger.addEventListener('click', openFaqModal);
+            faqClose.addEventListener('click', closeFaqModal);
+
+            faqModal.addEventListener('click', function (e) {
+                if (e.target === faqModal) {
+                    closeFaqModal();
+                }
+            });
+            window.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape' && faqModal.classList.contains('active')) {
+                    closeFaqModal();
+                }
+            });
+            var faqHeaders = faqModal.querySelectorAll('.faq-header');
+            faqHeaders.forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var isExpanded = btn.getAttribute('aria-expanded') === 'true';
+                    faqHeaders.forEach(function (h) {
+                        h.setAttribute('aria-expanded', 'false');
+                        var ansId = h.getAttribute('aria-controls');
+                        var ans = document.getElementById(ansId);
+                        if (ans) {
+                            ans.setAttribute('aria-hidden', 'true');
+                        }
+                    });
+                    if (!isExpanded) {
+                        btn.setAttribute('aria-expanded', 'true');
+                        var targetAnsId = btn.getAttribute('aria-controls');
+                        var targetAns = document.getElementById(targetAnsId);
+                        if (targetAns) {
+                            targetAns.setAttribute('aria-hidden', 'false');
+                        }
+                    }
+                });
+            });
+        })();
     }
 })();

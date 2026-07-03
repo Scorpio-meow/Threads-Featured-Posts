@@ -95,6 +95,104 @@
             <div class="page-info" aria-hidden="true"></div>
             <div class="pagination" role="navigation" aria-label="分頁"></div>
         </nav>
+        <footer class="page-footer">
+            <p class="footer-copyright">Threadfolio &copy; 2026</p>
+            <button id="faq-trigger" class="faq-trigger-btn" aria-label="開啟常見問題與除錯">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+                常見問題與除錯
+            </button>
+        </footer>
+    </div>
+    <div id="faq-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="faq-title"
+        aria-hidden="true">
+        <div class="modal-content">
+            <button id="faq-close" class="modal-close-btn" aria-label="關閉對話框" title="關閉">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+            <div class="modal-header">
+                <h2 id="faq-title">常見問題與除錯</h2>
+            </div>
+            <div class="modal-body">
+                <div class="faq-accordion">
+                    <div class="faq-item">
+                        <button class="faq-header" aria-expanded="false" aria-controls="faq-ans-1">
+                            <span class="faq-question">為什麼有些貼文顯示「在 Threads 查看此貼文 →」？</span>
+                            <span class="faq-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                                    stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </span>
+                        </button>
+                        <div id="faq-ans-1" class="faq-answer" aria-hidden="true">
+                            <p>這是因為 Threads 官方嵌入元件的載入限制。要順利顯示嵌入貼文，您必須<strong>在瀏覽器登入 <a href="https://www.threads.com/" target="_blank" rel="noopener noreferrer">Threads</a> 帳號</strong>，且<strong>未開啟瀏覽器的「不要追蹤 (Do Not Track)」功能</strong>（此功能會限制官方嵌入腳本載入）。另外，第三方廣告/隱私阻擋擴充功能也可能造成干擾。</p>
+                            <p><strong>解決方法：</strong>請確保已登入 <a href="https://www.threads.com/" target="_blank" rel="noopener noreferrer">Threads</a> 帳號、關閉「不要追蹤 (Do Not Track)」、暫時停用廣告攔截器並重新整理網頁，或者直接點擊備用連結至 Threads 上查看。</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-header" aria-expanded="false" aria-controls="faq-ans-2">
+                            <span class="faq-question">什麼是「速率限制 (Rate Limit)」？該如何處理？</span>
+                            <span class="faq-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                                    stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </span>
+                        </button>
+                        <div id="faq-ans-2" class="faq-answer" aria-hidden="true">
+                            <p>Threads 官方對嵌入內容的讀取頻率設有限制（HTTP 429）。當同一時間載入過多貼文或頻繁翻頁時，便會暫時被限流。</p>
+                            <p><strong>解決方法：</strong>本網頁內建速率限制自動偵測，觸發時會出現計時橫幅並暫停載入，倒數結束後會自動恢復。建議您調小「每頁顯示」數量以減少觸發機率。</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-header" aria-expanded="false" aria-controls="faq-ans-3">
+                            <span class="faq-question">如何將此網站安裝至手機或桌面？（離線存取支援）</span>
+                            <span class="faq-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                                    stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </span>
+                        </button>
+                        <div id="faq-ans-3" class="faq-answer" aria-hidden="true">
+                            <p>本站支援 PWA (Progressive Web App) 技術。您可以將其安裝至您的裝置中，以便未來在無網路的環境下離線瀏覽已快取的資源：</p>
+                            <ul>
+                                <li><strong>iOS (Safari)：</strong>點擊瀏覽器的「分享」按鈕，選擇「加入主畫面」。</li>
+                                <li><strong>Android / Chrome：</strong>點擊網址列旁的「安裝」圖示，或選單中的「安裝應用程式」。</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-header" aria-expanded="false" aria-controls="faq-ans-4">
+                            <span class="faq-question">如何開啟偵錯模式 (Debug Mode)？</span>
+                            <span class="faq-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+                                    stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </span>
+                        </button>
+                        <div id="faq-ans-4" class="faq-answer" aria-hidden="true">
+                            <p>偵錯模式開啟後，瀏覽器的主控台 (Console) 將會顯示 Threads 核心的完整錯誤與警告訊息，利於開發或排除連線問題。</p>
+                            <div class="debug-toggle-container">
+                                <span class="debug-status-label">當前偵錯狀態：<strong
+                                        id="debug-status-text">關閉</strong></span>
+                                <button id="debug-toggle-action" class="debug-action-btn">開啟偵錯模式</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
     <script src="config.js"></script>
     <script src="threads-loader.js"></script>
