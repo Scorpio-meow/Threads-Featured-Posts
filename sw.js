@@ -1,5 +1,5 @@
 const BASE_CACHE_PREFIX = 'threads-featured-posts';
-const SW_SCHEMA_VERSION = '3';
+const SW_SCHEMA_VERSION = '5';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
