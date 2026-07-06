@@ -1,4 +1,4 @@
-# Threadfolio
+# Threads Featured Posts
 
 一個精緻、響應式且具備高穩定性的純前端網頁應用程式，專門用來展示及分頁瀏覽 Threads貼文。專案內建強大的速率限制 (Rate Limiting) 退避機制、Iframe 載入錯誤攔截與優雅降級機制，並結合 PWA (Progressive Web App) 離線快取，提供無縫且滑順的使用者體驗。
 
