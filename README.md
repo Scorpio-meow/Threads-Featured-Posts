@@ -1,6 +1,6 @@
 # Threads Featured Posts
 
-一個精緻、響應式且具備高穩定性的純前端網頁應用程式，專門用來展示及分頁瀏覽 Threads 貼文。專案內建強大的速率限制（Rate Limiting）退避機制、Iframe 載入錯誤攔截與優雅降級機制，並結合 PWA（Progressive Web App）離線快取，提供無縫且滑順的使用者體驗。
+這是一個基於純前端技術所建置的精緻、響應式且高穩定性的網頁應用程式，專門用於展示與分頁瀏覽 Threads 貼文。專案內建強大的速率限制（Rate Limiting）退避機制、Iframe 載入錯誤攔截與優雅降級機制，並結合漸進式網頁應用（PWA）離線快取，提供無縫且流暢的使用者體驗。
 
 ---
 
@@ -54,10 +54,10 @@ python -m http.server 3000
 | :--- | :--- |
 | **前端核心** | 純 HTML5, CSS3, Vanilla JavaScript（ES5/ES6 相容） |
 | **框架依賴** | 零外部框架依賴（Zero dependencies） |
-| **字體系統** | Manrope + Noto Sans TC（Google Fonts，含 preconnect 最佳化） |
-| **樣式系統** | 現代原生 CSS（CSS 變數設計系統、玻璃擬物、Shimmer 載入動畫、CSS Grid/Flexbox 混合佈局、CSS `columns` 瀑布流、`@supports` 漸進增強、`prefers-reduced-motion` 無障礙適配） |
-| **離線技術** | Service Worker API（Cache Storage）, Web App Manifest |
-| **部署環境** | 支援任何靜態網頁伺服器（如 GitHub Pages, Vercel, Netlify） |
+| **字體系統** | Manrope 與 Noto Sans TC（Google Fonts，含 preconnect 最佳化） |
+| **樣式系統** | 現代原生 CSS（CSS 變數設計系統、玻璃擬物效果、Shimmer 載入動畫、CSS Grid/Flexbox 混合佈局、CSS `columns` 瀑布流、`@supports` 漸進增強、`prefers-reduced-motion` 無障礙適配） |
+| **離線技術** | Service Worker API（Cache Storage）、Web App Manifest |
+| **部署環境** | 支援 any 靜態網頁伺服器（如 GitHub Pages, Vercel, Netlify） |
 
 ---
 
@@ -68,18 +68,34 @@ python -m http.server 3000
 ### 檔案與組件關係圖
 
 ```mermaid
-graph LR
-    Index[index.html] --> Filter[console-filter.js]
-    Index --> Config[config.js]
-    Index --> Loader[threads-loader.js]
-    Index --> Style[styles.css]
+flowchart TD
+    subgraph Client ["前端容器 (Browser/Client)"]
+        Index["index.html"]
+        Style["styles.css"]
+        Manifest["manifest.json"]
+    end
+
+    subgraph Logic ["核心邏輯與控制"]
+        Config["config.js"]
+        Filter["console-filter.js"]
+        Loader["threads-loader.js"]
+    end
+
+    subgraph Service ["背景服務與離線支援"]
+        SW["sw.js"]
+    end
+
+    Index --> Filter
+    Index --> Config
+    Index --> Loader
+    Index --> Style
+    Index --> Manifest
     
-    Filter -- 攔截全域錯誤並派發事件 --> Loader
-    Config -- 提供貼文資料與常數配置 --> Loader
-    Loader -- 渲染貼文 DOM --> Index
+    Filter -- "攔截全域錯誤並派發限流事件" --> Loader
+    Config -- "提供貼文資料與常數配置" --> Loader
+    Loader -- "渲染貼文 DOM 至容器" --> Index
     
-    SW[sw.js] -- 離線快取與版本雜湊比對 --> Index
-    Manifest[manifest.json] -- 提供 PWA 設定 --> Index
+    SW -- "離線快取與內容雜湊版本控制" --> Index
 ```
 
 ### 系統執行流程圖
@@ -87,45 +103,41 @@ graph LR
 展示初始化、分塊渲染、Iframe 監控、429 速率限制及指數退避機制的交互流程：
 
 ```mermaid
-graph TD
-    Start[載入 index.html] --> Init[初始化 threads-loader.js]
-    Init --> ReadConfig[讀取 config.js 中的貼文與設定]
-    ReadConfig --> Render[使用 requestIdleCallback 分塊渲染骨架屏]
-    Render --> Stagger[依 BATCH_SIZE 與延遲逐一載入 Threads Iframe]
-    Stagger --> Monitor{MutationObserver 監控 Iframe}
+flowchart TD
+    Start(["載入 index.html"]) --> Init["初始化 threads-loader.js"]
+    Init --> ReadConfig["讀取 config.js 中的貼文與設定"]
+    ReadConfig --> Render["使用 requestIdleCallback 分塊渲染骨架屏"]
+    Render --> Stagger["依 BATCH_SIZE 與延遲逐一載入 Threads Iframe"]
+    Stagger --> Monitor{"MutationObserver 監控 Iframe"}
     
     %% 正常流程
-    Monitor -- 載入成功且高度正常 --> Done[貼文正常顯示]
+    Monitor -- "載入成功且高度正常" --> Done(["貼文正常顯示"])
     
     %% 限流流程
-    Monitor -- 429 速率限制 / 腳本錯誤 --> RateLimit[觸發全域攔截 console-filter.js]
-    RateLimit --> Backoff[計算指數退避時間並顯示倒數橫幅]
-    Backoff --> Pause[暫停後續貼文載入]
-    Pause -- 倒數結束 --> Stagger
+    Monitor -- "429 速率限制 / 腳本錯誤" --> RateLimit["觸發全域攔截 console-filter.js"]
+    RateLimit --> Backoff["計算指數退避時間並顯示倒數橫幅"]
+    Backoff --> Pause["暫停後續貼文載入"]
+    Pause -- "倒數結束" --> Stagger
     
     %% 異常流程
-    Monitor -- 載入超時 / 載入失敗 / 高度低於 200px --> Fallback[執行優雅降級]
-    Fallback --> Link[移除異常 Iframe 並顯示在 Threads 查看連結]
+    Monitor -- "載入超時 / 載入失敗 / 高度低於 200px" --> Fallback["執行優雅降級"]
+    Fallback --> Link["移除異常 Iframe 並顯示 Threads 查看連結"]
 ```
 
 ### 目錄結構說明
 
-```text
-Threads-Featured-Posts/
-├── assets/
-│   └── icons/
-│       ├── apple-touch-icon.png    # Apple 裝置觸控圖示 (180x180)
-│       ├── favicon.ico             # 傳統瀏覽器 Favicon
-│       ├── favicon-192x192.png     # PWA 標準圖示 (192x192, any + maskable)
-│       └── favicon-512x512.png     # PWA 大尺寸圖示 (512x512, any + maskable)
-├── config.js          # 設定檔（貼文資料 posts 陣列、分頁常數、速率限制延遲設定）
-├── console-filter.js  # Console 雜訊過濾器（最先載入以攔截全域錯誤與自訂事件派發）
-├── index.html         # 網頁主架構與 DOM 容器（含 SEO meta、PWA manifest、Google Fonts preconnect）
-├── manifest.json      # PWA 應用程式設定檔（安裝名稱、顏色、圖示與啟動 URL）
-├── styles.css         # UI 樣式表（CSS 變數設計系統、深/淺色主題、玻璃擬物、瀑布流、動畫、響應式斷點）
-├── sw.js              # Service Worker 腳本（內容雜湊快取版本控制、Network-First 策略、離線降級）
-└── threads-loader.js  # 核心業務邏輯（分頁、搜尋、標籤篩選、限流退避、Iframe 監控、分塊渲染、主題/版面切換、永久連結、單篇預覽）
-```
+- [assets/icons/](./assets/icons/) : 圖示資源目錄。
+  - [apple-touch-icon.png](./assets/icons/apple-touch-icon.png) : Apple 裝置觸控圖示 (180x180)。
+  - [favicon.ico](./assets/icons/favicon.ico) : 傳統瀏覽器 Favicon。
+  - [favicon-192x192.png](./assets/icons/favicon-192x192.png) : PWA 標準圖示 (192x192, any + maskable)。
+  - [favicon-512x512.png](./assets/icons/favicon-512x512.png) : PWA 大尺寸圖示 (512x512, any + maskable)。
+- [config.js](./config.js) : 設定檔（貼文資料 posts 陣列、分頁常數、速率限制延遲設定）。
+- [console-filter.js](./console-filter.js) : Console 雜訊過濾器（最先載入以攔截全域錯誤與自訂事件派發）。
+- [index.html](./index.html) : 網頁主架構與 DOM 容器（含 SEO meta、PWA manifest、Google Fonts preconnect）。
+- [manifest.json](./manifest.json) : PWA 應用程式設定檔（安裝名稱、顏色、圖示與啟動 URL）。
+- [styles.css](./styles.css) : UI 樣式表（CSS 變數設計系統、深/淺色主題、玻璃擬物、瀑布流、動畫、響應式斷點）。
+- [sw.js](./sw.js) : Service Worker 腳本（內容雜湊快取版本控制、Network-First 策略、離線降級）。
+- [threads-loader.js](./threads-loader.js) : 核心業務邏輯（分頁、搜尋、標籤篩選、限流退避、Iframe 監控、分塊渲染、主題/版面切換、永久連結、單篇預覽）。
 
 ---
 
@@ -159,11 +171,11 @@ Threads-Featured-Posts/
 - **確定性隨機洗牌**：支援一鍵切換隨機與預設排序，按鈕以視覺化狀態標示是否處於隨機模式。在隨機排序模式下，提供「重新洗牌」按鈕以產生新種子重新整理排序。使用基於 URL 參數的隨機排序種子（Seed）以確保分頁時的文章順序一致。
 
 ### PWA 離線支援
-- **離線存取功能**：支援離線存取功能，利用 Service Worker 快取核心靜態資源。提供完整的 [manifest.json](./manifest.json) 設定檔，支援在行動裝置與桌面端進行應用程式安裝與獨立視窗運行。
+- **離線存取功能**：支援離線存取功能，利用 Service Worker 快取核心資源。提供完整的 [manifest.json](./manifest.json) 設定檔，支援在行動裝置與桌面端進行應用程式安裝與獨立視窗運行。
 - **多尺寸圖示支援**：支援 192x192、512x512（含 maskable 用途）以及 Apple Touch Icon。動態快取版本雜湊機制，核心檔案任一變更即自動觸發快取更新。
 
 ### 高強度 Iframe 監控
-- **動態觀測**：使用 `MutationObserver` 嚴格監控由官方 `embed.js` 生成的 iframes。能自動捕捉 `chrome-error` 錯誤頁面、高度低於安全門檻 (200px) 的異常 iframe，以及指向已知 Facebook 錯誤網域的 iframe。
+- **動態觀測**：使用 `MutationObserver` 嚴格監控由官方 `embed.js` 生成 of iframes。能自動捕捉 `chrome-error` 錯誤頁面、高度低於安全門檻 (200px) 的異常 iframe，以及指向已知 Facebook 錯誤網域的 iframe。
 - **高度監控與降級**：以 `ResizeObserver`（或定時輪詢降級）監測 iframe 實際高度。執行優雅降級，顯示「在 Threads 查看此貼文」之備用連結，不干擾其他貼文載入。
 
 ### 單篇預覽模式
@@ -432,3 +444,12 @@ const posts = [
 | CSS `backdrop-filter` | 同時宣告 `-webkit-backdrop-filter` 與 `backdrop-filter` |
 | CSS `min()` / `clamp()` | 用於響應式尺寸，不支援時瀏覽器自動忽略 |
 | 隱藏滾動條 (Scrollbar Hiding) | 使用 `scrollbar-width: none` 搭配 `::-webkit-scrollbar { display: none; }` 與 `-ms-overflow-style: none`，確保 Chrome、Safari、Firefox 及 IE/Edge 等瀏覽器上皆能隱藏滾動條且無相容性警告。 |
+
+---
+
+## 貢獻指南 (Contributing)
+
+若您有任何改善本專案的建議或發現錯誤，歡迎提交 Issue 或 Pull Request。在提交貢獻前，請確保遵循以下原則：
+1. 本專案為純前端靜態應用程式，開發時請避免引入不必要的外部相依套件。
+2. 當需要使用與 Node 相關或套件管理指令時，優先推薦使用 Bun（例如 `bun` 或 `bunx` 等）以保持與本專案推薦開發流程的一致性。
+3. 確保程式碼風格與現有檔案（例如 [threads-loader.js](./threads-loader.js) 及 [styles.css](./styles.css)）一致，並對程式碼提供必要的註解說明。

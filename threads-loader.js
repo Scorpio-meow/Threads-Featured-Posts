@@ -416,7 +416,7 @@
                         if (bq) {
                             var blockquote = bq.querySelector('blockquote.text-post-media');
                             if (blockquote) {
-                                markBlockquoteFailed(blockquote, 'xframe-deny', true);
+                                markBlockquoteFailed(blockquote, 'xframe-deny', true, bq);
                             }
                         }
                     }
@@ -478,7 +478,7 @@
             return originalXHRSend.apply(this, arguments);
         };
     })();
-    function markBlockquoteFailed(blockquote, reason, skipRetry) {
+    function markBlockquoteFailed(blockquote, reason, skipRetry, postItem) {
         if (!blockquote) return;
         var failureReason = reason || 'unknown';
         try {
@@ -488,50 +488,68 @@
             }
         } catch (e) { }
         try {
-            var postItem = blockquote.closest('.post-item');
+            if (!postItem) {
+                postItem = blockquote.closest('.post-item');
+            }
             if (postItem) {
                 postItem.classList.remove('current-loading');
+                postItem.classList.add('error');
                 try {
                     var deadFrames = postItem.querySelectorAll('iframe');
                     deadFrames.forEach(function (fr) {
-                        var fh = fr.offsetHeight || fr.clientHeight || 0;
-                        if (fh < 50) { try { fr.remove(); } catch (e) { } }
+                        try { fr.remove(); } catch (e) { }
                     });
                 } catch (e) { }
             }
         } catch (e) { }
         try {
-            if (failureReason === 'xframe-deny' || failureReason === 'iframe-error' || failureReason === 'timeout' || failureReason === 'process-error') {
-                var fallbackUrl = blockquote.getAttribute('data-url') || '';
-                if (!fallbackUrl) {
-                    var fallbackLink = blockquote.querySelector('a[href]');
-                    if (fallbackLink) {
-                        fallbackUrl = fallbackLink.href || fallbackLink.getAttribute('href') || '';
-                    }
+            var fallbackUrl = blockquote.getAttribute('data-url') || '';
+            if (!fallbackUrl) {
+                var fallbackLink = blockquote.querySelector('a[href]');
+                if (fallbackLink) {
+                    fallbackUrl = fallbackLink.href || fallbackLink.getAttribute('href') || '';
                 }
-                var postItemEl = blockquote.closest('.post-item');
-                if (fallbackUrl && postItemEl && !postItemEl.querySelector('.fallback-link')) {
-                    var safeUrl = '';
-                    try {
-                        var parsedUrl = new URL(fallbackUrl, window.location.href);
-                        if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') {
-                            var host = parsedUrl.hostname.toLowerCase();
-                            if (host === 'threads.net' || host.endsWith('.threads.net') ||
-                                host === 'threads.com' || host.endsWith('.threads.com')) {
-                                safeUrl = parsedUrl.toString();
-                            }
-                        }
-                    } catch (e) { }
-                    if (safeUrl) {
-                        var link = document.createElement('a');
-                        link.href = safeUrl;
-                        link.target = '_blank';
-                        link.rel = 'noopener noreferrer';
-                        link.className = 'fallback-link';
-                        link.textContent = '在 Threads 查看此貼文 →';
-                        postItemEl.appendChild(link);
-                    }
+            }
+            if (postItem && fallbackUrl) {
+                var shareBtn = postItem.querySelector('.permalink-btn');
+                if (shareBtn) {
+                    try { shareBtn.remove(); } catch (e) { }
                 }
+                postItem.innerHTML = '';
+                if (shareBtn) {
+                    postItem.appendChild(shareBtn);
+                }
+
+                var reasonText = '載入逾時，或該貼文來自私密、停用、受年齡限制或地區限制的帳號';
+                if (failureReason === 'xframe-deny') {
+                    reasonText = '瀏覽器安全設定限制載入 (X-Frame)';
+                } else if (failureReason === 'iframe-error') {
+                    reasonText = 'Threads 伺服器回應錯誤 (500)';
+                } else if (failureReason === 'rate-limit') {
+                    reasonText = '已達 Threads 流量限制';
+                }
+
+                var fallbackContainer = document.createElement('div');
+                fallbackContainer.className = 'embed-error-fallback';
+                fallbackContainer.innerHTML =
+                    '<div class="fallback-icon">' +
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                    '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>' +
+                    '<line x1="12" y1="9" x2="12" y2="13"></line>' +
+                    '<line x1="12" y1="17" x2="12.01" y2="17"></line>' +
+                    '</svg>' +
+                    '</div>' +
+                    '<div class="fallback-title">貼文載入失敗</div>' +
+                    '<div class="fallback-reason">' + reasonText + '</div>' +
+                    '<a class="fallback-btn" href="' + fallbackUrl + '" target="_blank" rel="noopener noreferrer">' +
+                    '<span>在 Threads 上查看</span>' +
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+                    '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>' +
+                    '<polyline points="15 3 21 3 21 9"></polyline>' +
+                    '<line x1="10" y1="14" x2="21" y2="3"></line>' +
+                    '</svg>' +
+                    '</a>';
+                postItem.appendChild(fallbackContainer);
             }
         } catch (e) { }
     }
@@ -637,7 +655,7 @@
                 stats.loadTimes.push((Date.now() - startTime) / 1000);
                 console.log('[載入] embed 成功 (' + currentIndex + '/' + allBlockquotes.length + ')');
             } else {
-                markBlockquoteFailed(blockquote, reason || 'timeout', true);
+                markBlockquoteFailed(blockquote, reason || 'timeout', true, postItem);
                 stats.failed++;
             }
             inFlight = Math.max(0, inFlight - 1);
@@ -853,7 +871,7 @@
                                     if (handled) return;
                                     handled = true;
                                     if (!success) {
-                                        markBlockquoteFailed(blockquote, reason || 'iframe-error', true);
+                                        markBlockquoteFailed(blockquote, reason || 'iframe-error', true, postItem);
                                     }
                                     done(success);
                                 }
@@ -915,7 +933,7 @@
                                     console.log('[observer] 在 blockquote 移除後找到 iframe，視為替換成功');
                                     var src = found.getAttribute('src') || found.src || '';
                                     if (/chrome-error:|chromewebdata/i.test(src)) {
-                                        markBlockquoteFailed(blockquote, 'xframe-deny', true);
+                                        markBlockquoteFailed(blockquote, 'xframe-deny', true, postItem);
                                         done(false);
                                         return;
                                     }
@@ -923,7 +941,7 @@
                                     function markDone(success, reason) {
                                         if (handled) return;
                                         handled = true;
-                                        if (!success) markBlockquoteFailed(blockquote, reason || 'iframe-error', true);
+                                        if (!success) markBlockquoteFailed(blockquote, reason || 'iframe-error', true, postItem);
                                         done(success);
                                     }
                                     found.addEventListener('error', function () {
@@ -959,7 +977,7 @@
                 try {
                     var src = existingIframe.getAttribute('src') || existingIframe.src || '';
                     if (/chrome-error:|chromewebdata/i.test(src)) {
-                        markBlockquoteFailed(blockquote, 'xframe-deny', true);
+                        markBlockquoteFailed(blockquote, 'xframe-deny', true, postItem);
                         done(false);
                     } else {
                         done(true);
