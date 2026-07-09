@@ -1,5 +1,7 @@
 # Threads Featured Posts
 
+[English](./README_EN.md) | 繁體中文
+
 這是一個基於純前端技術所建置的精緻、響應式且高穩定性的網頁應用程式，專門用於展示與分頁瀏覽 Threads 貼文。專案內建強大的速率限制（Rate Limiting）退避機制、Iframe 載入錯誤攔截與優雅降級機制，並結合漸進式網頁應用（PWA）離線快取，提供無縫且流暢的使用者體驗。
 
 ---
