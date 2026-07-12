@@ -184,6 +184,12 @@ flowchart TD
 - **Dedicated URL Route**: Using the `post` query parameter (taking an index or permalink URL), the application enters a single post preview, hiding controls, tags, and pagination.
 - **Share & Copy Link**: Hovering on cards displays a permalink copy button. Clicking the share button copies the dedicated single-post URL to the clipboard (using `navigator.clipboard.writeText` with fallback to `document.execCommand`).
 
+### Loading Progress Panel
+- **Real-Time Progress Tracking**: When post embedding starts, an elegant glassmorphism loading progress panel is displayed below the top pagination bar, containing loading percentages and a dynamic progress bar.
+- **Estimated Next Load Time**: Dynamically estimates and counts down when the next post will start embedding (based on historical loading speed and safe stagger intervals).
+- **Estimated Total Load Time**: Intelligently calculates the remaining duration to finish embedding all posts on the page, factoring in any active rate limit backoff durations.
+- **Total Loading Duration**: Tracks the elapsed loading time dynamically during processing and displays the final total duration upon completion.
+
 ### Automatic Console Noise Filtering
 - **Muted Log Clutter**: [console-filter.js](./console-filter.js) silences cross-origin postMessage warnings, missing `favicon.ico` errors, and Instagram CDN 404s thrown by Threads' official embed script.
 - **Event Mapping**: Converts rate limits and X-Frame-Options blocks into custom events. Developers can append `?debug=1` to disable filtering.
@@ -199,7 +205,7 @@ flowchart TD
 
 The official Threads embed script can trigger client-side rate limits (HTTP 429 Too Many Requests) when loading many posts simultaneously. This project resolves this issue using the following strategies:
 
-- **Small Batch Concurrency**: Instead of loading the entire page at once, the system uses the `BATCH_SIZE` defined in [config.js](./config.js) (default is 3, constrained between 1 and 4) as a concurrency cap. Consecutive post loadings are staggered by `EMBED_STAGGER_DELAY` (default 700ms) with added random jitter to prevent requests synchronization.
+- **Small Batch Concurrency & Safety Overrides**: Instead of loading the entire page at once, the system supports a configurable `BATCH_SIZE` and `EMBED_STAGGER_DELAY` in [config.js](./config.js). However, to strictly comply with the official Threads oEmbed API limit of 1,000 requests per hour (average 3.6s intervals), the engine [threads-loader.js](./threads-loader.js) internally enforces key safe bounds: `BATCH_SIZE` is capped at `1` (sequential loading), `EMBED_STAGGER_DELAY` is bounded to at least `3600` ms (3.6 seconds), and the base `LOAD_DELAY` is capped at least `4000` ms (4 seconds) to guarantee out-of-the-box protection against HTTP 429 errors. A random jitter is also added to prevent request synchronization.
 - **Global Interception**: The system overrides `window.fetch` and `XMLHttpRequest.prototype.send` in [threads-loader.js](./threads-loader.js), and listens to `window.onerror` and `window.onunhandledrejection` to capture errors containing `429`, `rate limit`, or `Too Many Requests`. It also listens for the `threads:rate-limit` custom event dispatched by [console-filter.js](./console-filter.js).
 - **Retry-After Header Parsing**: When a 429 response is intercepted, the system attempts to read the `Retry-After` header to align the backoff delay with the server's recommendation.
 - **Exponential Backoff**: When a rate limit is detected, the system:
@@ -280,6 +286,10 @@ The Threads embed script (`embed.js`) generates frequent console warnings regard
 - **Staggered Entry Animation**: Cards animate in using `fadeInUp` with a 50ms incremental delay for the first 5 cards.
 - **Shimmer Skeletons**: Displays a pulsing dashed-border placeholder during iframe loads.
 - **Accessibility Adjustments**: Toggles transitions off for users with `prefers-reduced-motion` enabled, and optimizes `:focus-visible` outline rings for keyboard navigators.
+- **Official 658px Width Optimization**:
+  * **List Mode**: Outer `#posts-container` is styled with `max-width: 698px` and `20px` side paddings, ensuring the post cards render at the exact official spec of `658px` content width. The `.pagination-wrapper` is aligned to the same width.
+  * **Single Post Mode**: Outer container is styled with `max-width: 690px` and `16px` side paddings, yielding exactly `658px` inner content width.
+  * **Masonry Grid Mode**: Outer container is capped at `1160px` with a minimum column width of `340px`. When screen space is abundant, it renders 3 columns side-by-side (each column approx. `373px` wide), perfectly adapting to multi-column cards formatting.
 
 ---
 
@@ -325,9 +335,9 @@ You can adjust these constants at the top of [config.js](./config.js) to fine-tu
 
 | Setting | Description | Default |
 | :--- | :--- | :---: |
-| `LOAD_DELAY` | Base delay (ms) for iframe loading when resuming after rate limiting or standard loads | `4000` |
-| `BATCH_SIZE` | Maximum concurrent iframe loads allowed (restricted to 1–4 to prevent rate limiting) | `3` |
-| `EMBED_STAGGER_DELAY` | Stagger delay (ms) between starting adjacent iframe loads in the same batch | `700` |
+| `LOAD_DELAY` | Base delay (ms) for iframe loading when resuming after rate limiting or standard loads (**internally bounded to a minimum of 4000ms**) | `4000` |
+| `BATCH_SIZE` | Maximum concurrent iframe loads allowed (**internally capped at 1** to strictly comply with official rate limits) | `3` (forced to 1) |
+| `EMBED_STAGGER_DELAY` | Stagger delay (ms) between starting adjacent iframe loads in the same batch (**internally bounded to a minimum of 3600ms** to satisfy the official 1,000 requests/hour limit) | `700` (forced to 3600) |
 | `IFRAME_TIMEOUT` | Timeout duration (ms) for a single iframe load | `20000` |
 | `MIN_IFRAME_TIMEOUT` | Time threshold (ms) to run the first presence check for an iframe element | `8000` |
 | `RATE_LIMIT_BACKOFF` | Base backoff time (ms) when hitting 429 rate limit (escalates by 1.5x, max 300s) | `60000` |

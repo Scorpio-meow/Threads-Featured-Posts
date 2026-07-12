@@ -12,12 +12,128 @@
     var currentIndex = 0;
     var processing = false;
     var inFlight = 0;
+    var pageEmbedsCompleted = 0;
+    var pageLoadStartTime = 0;
+    var pageLoadEndTime = 0;
+    var currentPostStartTime = 0;
+    var nextPostScheduledTime = 0;
+    var rateLimitEndTime = 0;
+    var isPageLoadingEmbeds = false;
+    var progressIntervalId = null;
+    function createOrUpdateProgressPanel() {
+        var container = document.getElementById('posts-container');
+        if (!container) return;
+        var panel = document.getElementById('threads-loading-progress-panel');
+        if (!panel) {
+            panel = document.createElement('div');
+            panel.id = 'threads-loading-progress-panel';
+            panel.className = 'threads-progress-panel';
+            container.parentNode.insertBefore(panel, container);
+        }
+        var total = allBlockquotes.length;
+        var completed = pageEmbedsCompleted;
+        var percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+        var avgLoadTime = stats.loadTimes.length > 0 ?
+            (stats.loadTimes.reduce(function (a, b) { return a + b; }, 0) / stats.loadTimes.length) : 2.5;
+        var nextPostRemain = 0;
+        var now = Date.now();
+        var staggerMs = (typeof EMBED_STAGGER_DELAY !== 'undefined') ? Math.max(SAFE_STAGGER_DELAY, EMBED_STAGGER_DELAY) : SAFE_STAGGER_DELAY;
+        var rateLimitRemain = 0;
+        if (rateLimitDetected && rateLimitEndTime > now) {
+            rateLimitRemain = (rateLimitEndTime - now) / 1000;
+        }
+        if (completed < total) {
+            if (rateLimitRemain > 0) {
+                nextPostRemain = rateLimitRemain;
+            } else if (inFlight > 0) {
+                var currentActiveElapsed = (now - currentPostStartTime) / 1000;
+                var currentActiveRemain = Math.max(0, avgLoadTime - currentActiveElapsed);
+                nextPostRemain = currentActiveRemain + (staggerMs / 1000);
+            } else if (nextPostScheduledTime > now) {
+                nextPostRemain = Math.max(0, (nextPostScheduledTime - now) / 1000);
+            }
+        }
+        var totalRemain = 0;
+        if (completed < total) {
+            var remainingUnstarted = total - currentIndex;
+            var perPostTime = avgLoadTime + (staggerMs / 1000);
+            if (rateLimitRemain > 0) {
+                totalRemain = rateLimitRemain + (remainingUnstarted * perPostTime);
+            } else if (inFlight > 0) {
+                var currentActiveElapsed = (now - currentPostStartTime) / 1000;
+                var currentActiveRemain = Math.max(0, avgLoadTime - currentActiveElapsed);
+                totalRemain = currentActiveRemain + (remainingUnstarted * perPostTime);
+            } else if (nextPostScheduledTime > now) {
+                var staggerRemain = Math.max(0, (nextPostScheduledTime - now) / 1000);
+                totalRemain = staggerRemain + (remainingUnstarted * perPostTime);
+            } else {
+                totalRemain = remainingUnstarted * perPostTime;
+            }
+        }
+        var timeValueStr = '';
+        if (completed === total && total > 0) {
+            var totalTime = pageLoadEndTime > 0 ? (pageLoadEndTime - pageLoadStartTime) / 1000 : (now - pageLoadStartTime) / 1000;
+            timeValueStr = totalTime.toFixed(1) + ' 秒';
+        } else {
+            var elapsed = (now - pageLoadStartTime) / 1000;
+            timeValueStr = elapsed.toFixed(1) + ' 秒 (載入中)';
+        }
+        var nextPostValStr = completed === total ? '已完成' : nextPostRemain.toFixed(1) + ' 秒';
+        var totalRemainValStr = completed === total ? '已完成' : totalRemain.toFixed(1) + ' 秒';
+
+        var rateLimitAlert = '';
+        if (rateLimitRemain > 0) {
+            rateLimitAlert = '<div style="color: var(--error); font-weight: bold; margin-top: 8px; font-size: 0.85rem; animation: fallbackPulse 1.5s infinite;">偵測到速率限制，暫停中... 剩餘 ' + rateLimitRemain.toFixed(1) + ' 秒</div>';
+        }
+        panel.innerHTML =
+            '<div class="threads-progress-header">' +
+            '<span>貼文嵌入載入進度 (' + completed + '/' + total + ')</span>' +
+            '<span>' + percent + '%</span>' +
+            '</div>' +
+            '<div class="threads-progress-bar-bg">' +
+            '<div class="threads-progress-bar-fill" style="width: ' + percent + '%;"></div>' +
+            '</div>' +
+            '<div class="threads-progress-metrics">' +
+            '<div class="threads-metric-item">' +
+            '<span class="threads-metric-label">預計載入下篇時間</span>' +
+            '<span id="metric-next-remain" class="threads-metric-value">' + nextPostValStr + '</span>' +
+            '</div>' +
+            '<div class="threads-metric-item">' +
+            '<span class="threads-metric-label">預計全部載入時間</span>' +
+            '<span id="metric-total-remain" class="threads-metric-value">' + totalRemainValStr + '</span>' +
+            '</div>' +
+            '<div class="threads-metric-item">' +
+            '<span class="threads-metric-label">全部載入完成用時</span>' +
+            '<span id="metric-completed-time" class="threads-metric-value">' + timeValueStr + '</span>' +
+            '</div>' +
+            '</div>' +
+            rateLimitAlert;
+    }
+    function startProgressTracker() {
+        stopProgressTracker();
+        pageLoadStartTime = Date.now();
+        pageLoadEndTime = 0;
+        pageEmbedsCompleted = 0;
+        isPageLoadingEmbeds = true;
+        createOrUpdateProgressPanel();
+        progressIntervalId = setInterval(createOrUpdateProgressPanel, 100);
+    }
+    function stopProgressTracker() {
+        if (progressIntervalId) {
+            clearInterval(progressIntervalId);
+            progressIntervalId = null;
+        }
+    }
+    var SAFE_BATCH_SIZE = 1;
+    var SAFE_STAGGER_DELAY = 3600;
+    var SAFE_LOAD_DELAY = 4000;
     var EMBED_CONCURRENCY = (function () {
-        var n = (typeof BATCH_SIZE !== 'undefined' && BATCH_SIZE > 0) ? BATCH_SIZE : 3;
-        return Math.max(1, Math.min(4, n));
+        var n = (typeof BATCH_SIZE !== 'undefined' && BATCH_SIZE > 0) ? BATCH_SIZE : SAFE_BATCH_SIZE;
+        return Math.max(1, Math.min(SAFE_BATCH_SIZE, n));
     })();
     var paused = false;
-    var currentDelay = LOAD_DELAY;
+    var resolvedLoadDelay = (typeof LOAD_DELAY !== 'undefined') ? Math.max(SAFE_LOAD_DELAY, LOAD_DELAY) : SAFE_LOAD_DELAY;
+    var currentDelay = resolvedLoadDelay;
     var rateLimitDetected = false;
     var consecutiveErrors = 0;
     var lastRequestTime = 0;
@@ -365,6 +481,7 @@
         var backoffTime = typeof overrideBackoffMs === 'number' && overrideBackoffMs > 0 ?
             Math.min(overrideBackoffMs, 300000) :
             Math.min(RATE_LIMIT_BACKOFF * Math.pow(1.5, consecutiveErrors - 1), 300000);
+        rateLimitEndTime = Date.now() + backoffTime;
         currentDelay = Math.min(currentDelay * 2, MAX_DELAY);
         console.warn('[警告] 偵測到速率限制 (' + source + '),暫停載入 ' + (backoffTime / 1000) + ' 秒');
         showRateLimitBanner(backoffTime);
@@ -376,7 +493,7 @@
                 if (consecutiveErrors > 3) {
                     currentDelay = MAX_DELAY;
                 } else {
-                    currentDelay = Math.max(LOAD_DELAY, currentDelay / 1.5);
+                    currentDelay = Math.max(resolvedLoadDelay, currentDelay / 1.5);
                 }
                 console.log('[恢復] 速率限制解除,恢復載入,延遲: ' + (currentDelay / 1000) + ' 秒');
                 pumpEmbeds();
@@ -602,7 +719,7 @@
         }
         var now = Date.now();
         var timeSinceLastRequest = now - lastRequestTime;
-        var minDelay = typeof EMBED_STAGGER_DELAY !== 'undefined' ? EMBED_STAGGER_DELAY : 700;
+        var minDelay = (typeof EMBED_STAGGER_DELAY !== 'undefined') ? Math.max(SAFE_STAGGER_DELAY, EMBED_STAGGER_DELAY) : SAFE_STAGGER_DELAY;
         if (lastRequestTime > 0 && timeSinceLastRequest < minDelay) {
             setTimeout(pumpEmbeds, withJitter(minDelay - timeSinceLastRequest));
             return;
@@ -616,6 +733,7 @@
         currentIndex++;
         inFlight++;
         lastRequestTime = Date.now();
+        currentPostStartTime = lastRequestTime;
         stats.total++;
         var startTime = Date.now();
         var attemptFinished = false;
@@ -659,8 +777,17 @@
                 stats.failed++;
             }
             inFlight = Math.max(0, inFlight - 1);
+            pageEmbedsCompleted++;
+            if (pageEmbedsCompleted >= allBlockquotes.length) {
+                pageLoadEndTime = Date.now();
+                isPageLoadingEmbeds = false;
+                createOrUpdateProgressPanel();
+                stopProgressTracker();
+            }
             if (!paused && !rateLimitDetected) {
-                setTimeout(pumpEmbeds, withJitter(typeof EMBED_STAGGER_DELAY !== 'undefined' ? EMBED_STAGGER_DELAY : 700));
+                var delay = withJitter((typeof EMBED_STAGGER_DELAY !== 'undefined') ? Math.max(SAFE_STAGGER_DELAY, EMBED_STAGGER_DELAY) : SAFE_STAGGER_DELAY);
+                nextPostScheduledTime = Date.now() + delay;
+                setTimeout(pumpEmbeds, delay);
             }
         }
         function triggerEmbed() {
@@ -716,7 +843,9 @@
         var before = inFlight;
         processSingleEmbed();
         if (inFlight > before && inFlight < EMBED_CONCURRENCY && currentIndex < allBlockquotes.length) {
-            setTimeout(pumpEmbeds, withJitter(typeof EMBED_STAGGER_DELAY !== 'undefined' ? EMBED_STAGGER_DELAY : 700));
+            var delay = withJitter((typeof EMBED_STAGGER_DELAY !== 'undefined') ? Math.max(SAFE_STAGGER_DELAY, EMBED_STAGGER_DELAY) : SAFE_STAGGER_DELAY);
+            nextPostScheduledTime = Date.now() + delay;
+            setTimeout(pumpEmbeds, delay);
         }
     }
     function scheduleIdle(fn) {
@@ -1022,6 +1151,16 @@
                 document.documentElement.classList.remove('dark-theme');
             }
             localStorage.setItem('theme', theme);
+            try {
+                var themeMeta = document.getElementById('theme-color-meta');
+                if (!themeMeta) {
+                    themeMeta = document.createElement('meta');
+                    themeMeta.id = 'theme-color-meta';
+                    themeMeta.setAttribute('name', 'theme-color');
+                    document.head.appendChild(themeMeta);
+                }
+                themeMeta.setAttribute('content', theme === 'dark' ? '#020617' : '#f8f9fa');
+            } catch (e) { }
         }
         applyTheme(activeTheme);
         if (themeToggleBtn) {
@@ -1281,6 +1420,13 @@
             loadedCount = 0;
             stats = { total: 0, loaded: 0, failed: 0, rateLimitHits: 0, startTime: Date.now(), loadTimes: [] };
             try { hideRateLimitBanner(); } catch (e) { }
+            stopProgressTracker();
+            try {
+                var panel = document.getElementById('threads-loading-progress-panel');
+                if (panel) {
+                    panel.parentNode.removeChild(panel);
+                }
+            } catch (e) { }
         }
         function renderEmptyState(target) {
             if (!target) return;
@@ -1500,6 +1646,7 @@
                     try { updateUrlParams(push); } catch (e) { }
                     if (allBlockquotes.length > 0) {
                         try { currentIndex = 0; } catch (e) { }
+                        startProgressTracker();
                         pumpEmbeds();
                     }
                     ensurePageSizeControls();
@@ -1564,6 +1711,7 @@
                         if (bq) {
                             allBlockquotes = [bq];
                             currentIndex = 0;
+                            startProgressTracker();
                             pumpEmbeds();
                         }
                     });
