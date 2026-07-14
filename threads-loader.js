@@ -42,30 +42,22 @@
         if (rateLimitDetected && rateLimitEndTime > now) {
             rateLimitRemain = (rateLimitEndTime - now) / 1000;
         }
-        if (completed < total) {
-            if (rateLimitRemain > 0) {
-                nextPostRemain = rateLimitRemain;
-            } else if (inFlight > 0) {
-                var currentActiveElapsed = (now - currentPostStartTime) / 1000;
-                var currentActiveRemain = Math.max(0, avgLoadTime - currentActiveElapsed);
-                nextPostRemain = currentActiveRemain + (staggerMs / 1000);
-            } else if (nextPostScheduledTime > now) {
-                nextPostRemain = Math.max(0, (nextPostScheduledTime - now) / 1000);
-            }
-        }
         var totalRemain = 0;
+        var currentActiveElapsed = 0;
         if (completed < total) {
             var remainingUnstarted = total - currentIndex;
             var perPostTime = avgLoadTime + (staggerMs / 1000);
             if (rateLimitRemain > 0) {
                 totalRemain = rateLimitRemain + (remainingUnstarted * perPostTime);
+                nextPostRemain = rateLimitRemain;
             } else if (inFlight > 0) {
-                var currentActiveElapsed = (now - currentPostStartTime) / 1000;
-                var currentActiveRemain = Math.max(0, avgLoadTime - currentActiveElapsed);
-                totalRemain = currentActiveRemain + (remainingUnstarted * perPostTime);
+                currentActiveElapsed = (now - currentPostStartTime) / 1000;
+                totalRemain = (remainingUnstarted * perPostTime) + currentActiveElapsed;
+                nextPostRemain = staggerMs / 1000;
             } else if (nextPostScheduledTime > now) {
                 var staggerRemain = Math.max(0, (nextPostScheduledTime - now) / 1000);
                 totalRemain = staggerRemain + (remainingUnstarted * perPostTime);
+                nextPostRemain = staggerRemain;
             } else {
                 totalRemain = remainingUnstarted * perPostTime;
             }
@@ -80,6 +72,13 @@
         }
         var nextPostValStr = completed === total ? '已完成' : nextPostRemain.toFixed(1) + ' 秒';
         var totalRemainValStr = completed === total ? '已完成' : totalRemain.toFixed(1) + ' 秒';
+
+        var currentPostLoadTimeStr = '等待中';
+        if (completed === total && total > 0) {
+            currentPostLoadTimeStr = '已完成';
+        } else if (inFlight > 0) {
+            currentPostLoadTimeStr = currentActiveElapsed.toFixed(1) + ' 秒';
+        }
 
         var rateLimitAlert = '';
         if (rateLimitRemain > 0) {
@@ -97,6 +96,10 @@
             '<div class="threads-metric-item">' +
             '<span class="threads-metric-label">預計載入下篇時間</span>' +
             '<span id="metric-next-remain" class="threads-metric-value">' + nextPostValStr + '</span>' +
+            '</div>' +
+            '<div class="threads-metric-item">' +
+            '<span class="threads-metric-label">當前貼文載入用時</span>' +
+            '<span id="metric-current-load-time" class="threads-metric-value">' + currentPostLoadTimeStr + '</span>' +
             '</div>' +
             '<div class="threads-metric-item">' +
             '<span class="threads-metric-label">預計全部載入時間</span>' +
