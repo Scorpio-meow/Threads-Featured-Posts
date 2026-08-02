@@ -1,0 +1,39 @@
+# Threads Featured Posts
+> Pure frontend static web application for displaying, paginating, and filtering featured Threads posts with exponential rate-limiting backoff and PWA support.
+> 純前端 Threads 精選貼文展示網頁，具備自動速率限制退避、標籤搜尋篩選與 PWA 離線快取支援。
+
+## Ecosystem Role / 生態系定位
+- Downstream web application in the Threads tools ecosystem.
+- Reads post array exported by `threads-embedded-code` (Chrome Extension) into `config.js`.
+- 生態系中的展示端：讀取由 `threads-embedded-code` 瀏覽器擴充功能所匯出之 `config.js` 貼文陣列。
+
+## Core Files / 核心檔案
+- [index.html](./index.html): Main application UI layout and modal definitions / 頁面主要 HTML 結構與 Modal 模組。
+- [config.js](./config.js): Post data source (`posts` array) and runtime rate-limiting configuration constants / 貼文資料源與系統運作參數設定。
+- [threads-loader.js](./threads-loader.js): Core logic for post pagination, rate-limit backoff, iframe monitoring, rendering, and search / 分頁控制、退避限流、Iframe 狀態監控與 DOM 渲染邏輯。
+- [console-filter.js](./console-filter.js): Interceptor for Threads official embed script console noise and cross-origin 404 errors / Threads 嵌入腳本 Console 雜訊與跨域錯誤攔截器。
+- [styles.css](./styles.css): Design system with CSS variables, light/dark themes, masonry columns, and glassmorphism UI / 樣式設計系統，包含主題變數、瀑布流與玻璃擬物 UI。
+- [sw.js](./sw.js): Service Worker script for offline caching and version hashing / PWA Service Worker 離線快取與版本版號控制。
+- [manifest.json](./manifest.json): Web App Manifest for PWA installation / PWA 應用程式清單。
+
+## Data Format Schema / 資料格式
+Posts in `config.js` (`posts` array):
+```typescript
+interface PostItem {
+  embedCode: string;   // Threads blockquote HTML string / 官方原生的 blockquote HTML 內嵌碼
+  postLink: string;    // Full URL to Threads post / Threads 貼文原始連結
+  author: string;      // Author handle without @ / 作者帳號名稱
+  content: string;     // Extracted post text / 貼文純文字內容
+  tags: string[];      // Array of hashtags and keywords / 標籤陣列
+}
+```
+
+## Key Mechanisms & Algorithms / 核心機制與演算法
+- Exponential Backoff / 指數退避：Global 429 error detection automatically pauses queue loading and applies exponential delays (escalating by 1.5x up to 300s) / 遇到 HTTP 429 自動開啟倒數橫幅並暫停佇列載入。
+- Chunked DOM Rendering / 分塊渲染：Uses `requestIdleCallback` to prevent blocking the main thread during post rendering / 避免主執行緒阻塞。
+- Seeded Random Shuffle / 確定性隨機：URL parameter `?random=<timestamp>` ensures consistent shuffle order across page navigation / URL 參數種子維持分頁一致性。
+- Iframe Health Check / Iframe 健康度檢測：`MutationObserver` + `ResizeObserver` replace broken or blocked iframes (<200px height or timeout) with graceful degradation fallback links / 異常 iframe 自動替換為降級連結。
+
+## Development & Execution / 開發與運行
+- Run static server with Bun: `bunx http-server -p 3000`
+- Open in browser: `http://localhost:3000`
