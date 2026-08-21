@@ -1,39 +1,93 @@
 # Threads Featured Posts
 > Pure frontend static web application for displaying, paginating, and filtering featured Threads posts with exponential rate-limiting backoff and PWA support.
-> 純前端 Threads 精選貼文展示網頁，具備自動速率限制退避、標籤搜尋篩選與 PWA 離線快取支援。
+> 基於純前端技術之精選 Threads 貼文展示網頁，具備指數速率退避、即時標籤搜尋、Iframe 異常監控與 PWA 離線快取支援。
 
-## Ecosystem Role / 生態系定位
-- Downstream web application in the Threads tools ecosystem.
-- Reads post array exported by `threads-embedded-code` (Chrome Extension) into `config.js`.
-- 生態系中的展示端：讀取由 `threads-embedded-code` 瀏覽器擴充功能所匯出之 `config.js` 貼文陣列。
+## Ecosystem Integration / 生態系定位與關聯
+- Upstream Collector / 資料收集端: `threads-embedded-code` (Chrome Extension, https://github.com/Scorpio-meow/threads-embedded-code.git). Extracts, sanitizes, and exports structured Threads post data while browsing Threads.
+- Downstream Viewer / 內容展示端: `Threads-Featured-Posts` (Static Web App, https://github.com/Scorpio-meow/Threads-Featured-Posts.git). Ingests the exported `posts` array in `config.js` and provides resilient, paginated, and filtered masonry presentation.
 
-## Core Files / 核心檔案
-- [index.html](./index.html): Main application UI layout and modal definitions / 頁面主要 HTML 結構與 Modal 模組。
-- [config.js](./config.js): Post data source (`posts` array) and runtime rate-limiting configuration constants / 貼文資料源與系統運作參數設定。
-- [threads-loader.js](./threads-loader.js): Core logic for post pagination, rate-limit backoff, iframe monitoring, rendering, and search / 分頁控制、退避限流、Iframe 狀態監控與 DOM 渲染邏輯。
-- [console-filter.js](./console-filter.js): Interceptor for Threads official embed script console noise and cross-origin 404 errors / Threads 嵌入腳本 Console 雜訊與跨域錯誤攔截器。
-- [styles.css](./styles.css): Design system with CSS variables, light/dark themes, masonry columns, and glassmorphism UI / 樣式設計系統，包含主題變數、瀑布流與玻璃擬物 UI。
-- [sw.js](./sw.js): Service Worker script for offline caching and version hashing / PWA Service Worker 離線快取與版本版號控制。
-- [manifest.json](./manifest.json): Web App Manifest for PWA installation / PWA 應用程式清單。
+## Core Files / 核心檔案結構
+- index.html: Main semantic HTML structure, search bar, theme toggles, tags container, pagination wrappers, and FAQ diagnostic modal.
+- config.js: Post data repository (`posts` array) and runtime rate-limiting/rendering configuration constants.
+- threads-loader.js: Primary runtime controller managing post pagination, rate-limit backoff handling, iframe lifecycle monitoring, DOM rendering, tag extraction, search filtering, and progress metrics.
+- console-filter.js: Global error and warning interceptor that suppresses Threads embed script cross-origin 404 noise and dispatches `threads:rate-limit` custom events upon detecting HTTP 429 status.
+- styles.css: Design token system with CSS custom properties, Light/Dark theme styles, CSS `columns` masonry layout, skeleton shimmer animations, and glassmorphism UI components.
+- sw.js: Progressive Web App (PWA) Service Worker implementing djb2 content hashing across core files for automated cache invalidation and offline asset serving.
+- manifest.json: Web App Manifest specification for desktop and mobile installation.
 
-## Data Format Schema / 資料格式
-Posts in `config.js` (`posts` array):
+## Data Types & Schema / 資料型別與規範
+
 ```typescript
+// Post item schema in config.js (posts array)
 interface PostItem {
-  embedCode: string;   // Threads blockquote HTML string / 官方原生的 blockquote HTML 內嵌碼
-  postLink: string;    // Full URL to Threads post / Threads 貼文原始連結
-  author: string;      // Author handle without @ / 作者帳號名稱
-  content: string;     // Extracted post text / 貼文純文字內容
-  tags: string[];      // Array of hashtags and keywords / 標籤陣列
+  embedCode: string;   // Threads official blockquote HTML string
+  postLink: string;    // Direct URL to the Threads post
+  author: string;      // Author username handle (without @)
+  content: string;     // Extracted plaintext content of the post
+  tags: string[];      // Extracted hashtags and keywords
+}
+
+// Runtime configuration constants in config.js
+interface RuntimeConfig {
+  LOAD_DELAY: number;                 // Base delay between post loads in ms (default: 4000)
+  BATCH_SIZE: number;                 // Concurrent iframe loads limit (default: 1 for safety)
+  EMBED_STAGGER_DELAY: number;        // Stagger delay between adjacent post requests (default: 3600)
+  IFRAME_TIMEOUT: number;             // Iframe render timeout threshold in ms (default: 3600)
+  MIN_IFRAME_TIMEOUT: number;         // Initial presence check threshold in ms (default: 8000)
+  RATE_LIMIT_BACKOFF: number;         // Base backoff on 429 error in ms (default: 60000, 1.5x scaling)
+  MAX_DELAY: number;                  // Maximum ceiling for dynamic delay in ms (default: 60000)
+  MIN_DELAY_BETWEEN_REQUESTS: number; // Minimum safety interval between requests in ms (default: 3600)
+  MAX_VISIBLE_QUEUE: number;          // Maximum active DOM card nodes kept in memory (default: 30)
+  PAGE_SIZE_OPTIONS: number[];        // Available page size choices (default: [1, 3, 5, 10, 25, 50])
+  PAGE_SIZE: number;                  // Default number of posts rendered per page (default: 10)
+}
+
+// URL Query parameters schema
+interface URLParams {
+  page?: number;       // Target page index (1-based)
+  page_size?: number;  // Number of items per page
+  random?: string;     // Deterministic random seed (timestamp string)
+  search?: string;     // Query string matching author, content, or tags
+  tag?: string;        // Exact hashtag match (excluding #)
+  post?: string;       // Single post preview mode (URL string or index)
+  debug?: '1';         // Enable full logging and bypass console filtering
 }
 ```
 
-## Key Mechanisms & Algorithms / 核心機制與演算法
-- Exponential Backoff / 指數退避：Global 429 error detection automatically pauses queue loading and applies exponential delays (escalating by 1.5x up to 300s) / 遇到 HTTP 429 自動開啟倒數橫幅並暫停佇列載入。
-- Chunked DOM Rendering / 分塊渲染：Uses `requestIdleCallback` to prevent blocking the main thread during post rendering / 避免主執行緒阻塞。
-- Seeded Random Shuffle / 確定性隨機：URL parameter `?random=<timestamp>` ensures consistent shuffle order across page navigation / URL 參數種子維持分頁一致性。
-- Iframe Health Check / Iframe 健康度檢測：`MutationObserver` + `ResizeObserver` replace broken or blocked iframes (<200px height or timeout) with graceful degradation fallback links / 異常 iframe 自動替換為降級連結。
+## Key Algorithms & Operational Mechanisms / 核心演算法與運行機制
 
-## Development & Execution / 開發與運行
-- Run static server with Bun: `bunx http-server -p 3000`
-- Open in browser: `http://localhost:3000`
+1. Exponential Rate-Limiting Backoff (指數退避限流):
+   - `console-filter.js` intercepts `429`, `rate limit`, or `too many requests` patterns and fires `threads:rate-limit` event.
+   - `threads-loader.js` catches the event, immediately pauses the queue, shows a live countdown banner on the progress panel, and calculates backoff time (`currentBackoff * 1.5` up to 300s).
+   - Once the timer expires, the queue safely resumes loading remaining embeds.
+
+2. Chunked Non-Blocking DOM Rendering (分塊非阻塞渲染):
+   - Uses `requestIdleCallback` (with `setTimeout` fallback) to render DOM cards without blocking main-thread user interactions.
+   - Displays skeleton placeholders with shimmer CSS animations to maintain smooth INP metrics.
+
+3. Deterministic Seeded Shuffle (確定性隨機洗牌):
+   - Shuffling generates a timestamp seed preserved in URL `?random=<seed>`, guaranteeing identical post sorting order during pagination and refresh.
+
+4. Iframe Health Observer & Graceful Degradation (Iframe 監控與降級):
+   - Uses `MutationObserver` to watch iframe insertion and `ResizeObserver` to monitor rendered height.
+   - If an iframe fails to render, times out, or stays under 200px height (indicating block/error), it is gracefully replaced with a fallback card containing author info and direct Threads link.
+
+5. Dynamic Service Worker Cache Invalidation (djb2 內容雜湊版本管理):
+   - `sw.js` reads source code of core files (`config.js`, `threads-loader.js`, `console-filter.js`, `styles.css`, `index.html`, `manifest.json`), computes a unified 32-bit djb2 hash, and creates versioned caches automatically.
+
+## Development & Serving / 本機開發與指令
+- Static server execution via Bun (Preferred):
+  ```bash
+  bunx http-server -p 3000
+  ```
+- Static server execution via Python (Fallback):
+  ```bash
+  python -m http.server 3000
+  ```
+- Access application:
+  `http://localhost:3000`
+
+## Known Constraints & Troubleshooting / 開發已知限制與除錯
+- Threads Embed Authentication: Official Threads embed iframes require the user's browser to be logged into Threads and "Do Not Track" to be disabled; otherwise fallback links are displayed.
+- Rate Limiting Defense: Set `BATCH_SIZE = 1` and `EMBED_STAGGER_DELAY >= 3600` in `config.js` to ensure long-term uninterrupted embed rendering.
+- Diagnostic Mode: Append `?debug=1` to the URL to view unmasked console errors and timing telemetry.
