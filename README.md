@@ -4,7 +4,7 @@
 
 **基於純前端技術之精選 Threads 貼文展示、多欄瀑布流排版與智慧限流防護網頁應用**
 
-[![License](https://img.shields.io/badge/license-MIT-yellow?style=for-the-badge)](#授權條款)
+[![License](https://img.shields.io/badge/license-MIT-yellow?style=for-the-badge)](./LICENSE)
 [![PWA](https://img.shields.io/badge/PWA-Ready-brightgreen?style=for-the-badge&logo=pwa&logoColor=white)](./manifest.json)
 [![Tech Stack](https://img.shields.io/badge/tech--stack-Vanilla--JS-blue?style=for-the-badge&logo=javascript&logoColor=white)](#技術規格與技術棧)
 [![Dependencies](https://img.shields.io/badge/dependencies-0-success?style=for-the-badge)](#技術規格與技術棧)
@@ -565,7 +565,7 @@ cd Threads-Featured-Posts
 
 ### 授權條款
 
-本專案採用 **[MIT 授權條款](https://opensource.org/licenses/MIT)** 開源釋出。您可以自由使用、修改、分發與整合於個人或商業專案中。
+本專案採用 **[MIT 授權條款](./LICENSE)** 開源釋出。您可以自由使用、修改、分發與整合於個人或商業專案中。
 
 ### 免責聲明
 

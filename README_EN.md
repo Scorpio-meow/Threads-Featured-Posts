@@ -4,7 +4,7 @@
 
 **Pure front-end web application for displaying, paginating, and organizing featured Threads posts with multi-column masonry layouts and automated rate-limiting protection**
 
-[![License](https://img.shields.io/badge/license-MIT-yellow?style=for-the-badge)](#license)
+[![License](https://img.shields.io/badge/license-MIT-yellow?style=for-the-badge)](./LICENSE)
 [![PWA](https://img.shields.io/badge/PWA-Ready-brightgreen?style=for-the-badge&logo=pwa&logoColor=white)](./manifest.json)
 [![Tech Stack](https://img.shields.io/badge/tech--stack-Vanilla--JS-blue?style=for-the-badge&logo=javascript&logoColor=white)](#tech-stack--specifications)
 [![Dependencies](https://img.shields.io/badge/dependencies-0-success?style=for-the-badge)](#tech-stack--specifications)
@@ -563,7 +563,7 @@ This project provides standardized **[llms.txt](./llms.txt)** (and backward-comp
 
 ### License
 
-This project is licensed under the **[MIT License](https://opensource.org/licenses/MIT)**. You are free to use, modify, distribute, and integrate it into private or commercial projects.
+This project is licensed under the **[MIT License](./LICENSE)**. You are free to use, modify, distribute, and integrate it into private or commercial projects.
 
 ### Disclaimer
 

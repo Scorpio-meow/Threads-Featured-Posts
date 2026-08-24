@@ -4,6 +4,7 @@
 ## Ecosystem Integration
 - Upstream Collector: threads-embedded-code (Google Chrome Extension, https://github.com/Scorpio-meow/threads-embedded-code.git). Automatically captures, sanitizes DOM noise, and exports structured post datasets while browsing Threads.
 - Downstream Presentation: Threads-Featured-Posts (Static Web App, https://github.com/Scorpio-meow/Threads-Featured-Posts.git). Ingests the exported posts array in config.js to provide a robust, rate-limited, filtered, and responsive showcase interface.
+- License: MIT ([LICENSE](./LICENSE))
 
 ## Core Files & Directory Structure
 - index.html: Primary semantic HTML structure containing search inputs, dark/light theme toggles, hashtag container, masonry/list layout wrappers, pagination controls, loading progress panel, and FAQ diagnostic modal.
@@ -143,3 +144,6 @@ interface URLParams {
 - Threads Embed Authentication: Official Threads embed iframes require the user's browser to be logged into Threads and "Do Not Track" to be disabled; otherwise fallback links are displayed.
 - Rate Limiting Defense: Maintain BATCH_SIZE = 1 and EMBED_STAGGER_DELAY >= 3600 in config.js to ensure long-term uninterrupted embed rendering.
 - Diagnostic Mode: Append `?debug=1` to the URL to view unmasked console errors and timing telemetry.
+
+## License
+Licensed under the [MIT License](./LICENSE).
