@@ -450,6 +450,58 @@
         }
         return false;
     }
+    function sanitizeThreadsUrl(rawUrl) {
+        if (!rawUrl || typeof rawUrl !== 'string') return '#';
+        try {
+            var parsed = new URL(rawUrl.trim(), window.location.origin);
+            if ((parsed.protocol === 'http:' || parsed.protocol === 'https:') && isHostAllowed(parsed.href, ALLOWED_THREADS_HOSTS)) {
+                return encodeURI(parsed.href);
+            }
+        } catch (e) { }
+        return '#';
+    }
+    function createFallbackAlertIcon() {
+        var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('width', '24');
+        svg.setAttribute('height', '24');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('fill', 'none');
+        svg.setAttribute('stroke', 'currentColor');
+        svg.setAttribute('stroke-width', '2');
+        svg.setAttribute('stroke-linecap', 'round');
+        svg.setAttribute('stroke-linejoin', 'round');
+        var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', 'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z');
+        var line1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line1.setAttribute('x1', '12'); line1.setAttribute('y1', '9'); line1.setAttribute('x2', '12'); line1.setAttribute('y2', '13');
+        var line2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line2.setAttribute('x1', '12'); line2.setAttribute('y1', '17'); line2.setAttribute('x2', '12.01'); line2.setAttribute('y2', '17');
+        svg.appendChild(path);
+        svg.appendChild(line1);
+        svg.appendChild(line2);
+        return svg;
+    }
+    function createExternalLinkIcon() {
+        var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('width', '14');
+        svg.setAttribute('height', '14');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('fill', 'none');
+        svg.setAttribute('stroke', 'currentColor');
+        svg.setAttribute('stroke-width', '2.5');
+        svg.setAttribute('stroke-linecap', 'round');
+        svg.setAttribute('stroke-linejoin', 'round');
+        var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6');
+        var polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+        polyline.setAttribute('points', '15 3 21 3 21 9');
+        var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', '10'); line.setAttribute('y1', '14'); line.setAttribute('x2', '21'); line.setAttribute('y2', '3');
+        svg.appendChild(path);
+        svg.appendChild(polyline);
+        svg.appendChild(line);
+        return svg;
+    }
     function logStats() {
         if (stats.total === 0) return;
         var avgLoadTime = stats.loadTimes.length > 0 ?
@@ -621,19 +673,23 @@
             }
         } catch (e) { }
         try {
-            var fallbackUrl = blockquote.getAttribute('data-url') || '';
-            if (!fallbackUrl) {
-                var fallbackLink = blockquote.querySelector('a[href]');
-                if (fallbackLink) {
-                    fallbackUrl = fallbackLink.href || fallbackLink.getAttribute('href') || '';
+            var rawFallbackUrl = '';
+            if (blockquote) {
+                rawFallbackUrl = blockquote.getAttribute('data-url') || '';
+                if (!rawFallbackUrl) {
+                    var fallbackLink = blockquote.querySelector('a[href]');
+                    if (fallbackLink) {
+                        rawFallbackUrl = fallbackLink.getAttribute('href') || fallbackLink.href || '';
+                    }
                 }
             }
-            if (postItem && fallbackUrl) {
+            var safeFallbackUrl = sanitizeThreadsUrl(rawFallbackUrl);
+            if (postItem && safeFallbackUrl && safeFallbackUrl !== '#') {
                 var shareBtn = postItem.querySelector('.permalink-btn');
                 if (shareBtn) {
                     try { shareBtn.remove(); } catch (e) { }
                 }
-                postItem.innerHTML = '';
+                postItem.textContent = '';
                 if (shareBtn) {
                     postItem.appendChild(shareBtn);
                 }
@@ -649,7 +705,7 @@
                 fallbackContainer.className = 'embed-error-fallback';
                 var iconDiv = document.createElement('div');
                 iconDiv.className = 'fallback-icon';
-                iconDiv.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>';
+                iconDiv.appendChild(createFallbackAlertIcon());
                 fallbackContainer.appendChild(iconDiv);
                 var titleDiv = document.createElement('div');
                 titleDiv.className = 'fallback-title';
@@ -659,10 +715,6 @@
                 reasonDiv.className = 'fallback-reason';
                 reasonDiv.textContent = reasonText;
                 fallbackContainer.appendChild(reasonDiv);
-                var safeFallbackUrl = '#';
-                if (/^https?:\/\//i.test(fallbackUrl)) {
-                    safeFallbackUrl = fallbackUrl;
-                }
                 var fallbackBtn = document.createElement('a');
                 fallbackBtn.className = 'fallback-btn';
                 fallbackBtn.href = safeFallbackUrl;
@@ -671,11 +723,7 @@
                 var btnSpan = document.createElement('span');
                 btnSpan.textContent = '在 Threads 上查看';
                 fallbackBtn.appendChild(btnSpan);
-                var btnSvg = document.createElement('span');
-                btnSvg.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>';
-                if (btnSvg.firstElementChild) {
-                    fallbackBtn.appendChild(btnSvg.firstElementChild);
-                }
+                fallbackBtn.appendChild(createExternalLinkIcon());
                 fallbackContainer.appendChild(fallbackBtn);
                 postItem.appendChild(fallbackContainer);
             }
@@ -1250,7 +1298,7 @@
         function renderTagsContainer() {
             var tagsContainer = document.getElementById('tags-container');
             if (!tagsContainer) return;
-            tagsContainer.innerHTML = '';
+            tagsContainer.textContent = '';
             var tagCounts = {};
             normalizedPosts.forEach(function (p) {
                 p.tags.forEach(function (t) {
@@ -1455,7 +1503,7 @@
             var paginationEls = document.querySelectorAll('.pagination');
             if (!paginationEls || paginationEls.length === 0) return;
             syncPageSizeControls();
-            paginationEls.forEach(function (el) { el.innerHTML = ''; });
+            paginationEls.forEach(function (el) { el.textContent = ''; });
             var totalItems = Array.isArray(activePosts) ? activePosts.length : 0;
             if (totalItems === 0) {
                 paginationEls.forEach(function (paginationEl) {
@@ -1630,7 +1678,7 @@
             currentPage = page;
             lastRenderedPageSize = pageSize;
             clearPageState();
-            container.innerHTML = '';
+            container.textContent = '';
             if (typeof window.scrollTo === 'function') window.scrollTo(0, 0);
             if (!activePosts || activePosts.length === 0) {
                 renderEmptyState(container);
@@ -1692,7 +1740,7 @@
                     }
                     var targetPost = activePosts[targetGlobalIdx];
                     document.documentElement.classList.add('single-post-mode');
-                    container.innerHTML = '';
+                    container.textContent = '';
                     var singleItem = document.createElement('div');
                     singleItem.className = 'post-item post-item--single';
                     var embedCode = targetPost.embedCode || '';
@@ -1712,8 +1760,21 @@
                     backUrl.searchParams.delete('page_size');
                     var backLink = document.createElement('a');
                     backLink.className = 'single-post-banner__back';
-                    backLink.href = backUrl.toString();
-                    backLink.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>回到完整列表';
+                    backLink.href = encodeURI(backUrl.toString());
+                    var backSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    backSvg.setAttribute('width', '15');
+                    backSvg.setAttribute('height', '15');
+                    backSvg.setAttribute('viewBox', '0 0 24 24');
+                    backSvg.setAttribute('fill', 'none');
+                    backSvg.setAttribute('stroke', 'currentColor');
+                    backSvg.setAttribute('stroke-width', '2.5');
+                    backSvg.setAttribute('stroke-linecap', 'round');
+                    backSvg.setAttribute('stroke-linejoin', 'round');
+                    var backPolyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+                    backPolyline.setAttribute('points', '15 18 9 12 15 6');
+                    backSvg.appendChild(backPolyline);
+                    backLink.appendChild(backSvg);
+                    backLink.appendChild(document.createTextNode('回到完整列表'));
                     var backLabel = document.createElement('span');
                     backLabel.className = 'single-post-banner__label';
                     backLabel.textContent = '單篇預覽';

@@ -1913,6 +1913,7 @@ html.dark-theme .post-item blockquote.text-post-media {
 }
 
 .single-post-mode #posts-container {
+    min-height: unset;
     max-width: 690px;
     margin: 0 auto;
     padding: 0 16px 40px;
