@@ -1,21 +1,101 @@
+<div align="center">
+
 # Threads Featured Posts
+
+**Pure front-end web application for displaying, paginating, and organizing featured Threads posts with multi-column masonry layouts and automated rate-limiting protection**
+
+[![License](https://img.shields.io/badge/license-MIT-yellow?style=for-the-badge)](#license)
+[![PWA](https://img.shields.io/badge/PWA-Ready-brightgreen?style=for-the-badge&logo=pwa&logoColor=white)](./manifest.json)
+[![Tech Stack](https://img.shields.io/badge/tech--stack-Vanilla--JS-blue?style=for-the-badge&logo=javascript&logoColor=white)](#tech-stack--specifications)
+[![Dependencies](https://img.shields.io/badge/dependencies-0-success?style=for-the-badge)](#tech-stack--specifications)
+[![Companion Repo](https://img.shields.io/badge/Companion_Repo-threads--embedded--code-8A2BE2?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Scorpio-meow/threads-embedded-code)
+
+---
 
 English | [繁體中文](./README.md)
 
-An elegant, responsive, and highly stable web application built using pure front-end technologies for displaying and paginating Threads posts. Features an automated rate-limiting exponential backoff mechanism, iframe load error interception with graceful degradation, deterministic seeded shuffling, and Progressive Web App (PWA) offline caching for a seamless browsing, searching, and presentation experience.
+Pure front-end vanilla architecture, zero heavy external frameworks, ready out of the box.  
+Equipped with HTTP 429 rate-limiting exponential backoff, iframe rendering anomaly monitoring with graceful fallback, deterministic seeded shuffling,  
+and Progressive Web App (PWA) offline caching for a seamless browsing and searching experience.
+
+</div>
+
+---
+
+## Table of Contents
+
+- [Project Overview & Core Values](#project-overview--core-values)
+- [Ecosystem & Integration](#ecosystem--integration)
+- [Quick Start](#quick-start)
+  - [Prerequisites & Environment](#prerequisites--environment)
+  - [1. Clone Repository](#1-clone-repository)
+  - [2. Configure Post Data](#2-configure-post-data)
+  - [3. Start Local Development Server](#3-start-local-development-server)
+- [Core Features](#core-features)
+  - [1. Real-Time Search & Tag Filtering](#1-real-time-search--tag-filtering)
+  - [2. Dual Theme System & CSS Design Tokens](#2-dual-theme-system--css-design-tokens)
+  - [3. Responsive CSS Masonry & Single-Column Layout](#3-responsive-css-masonry--single-column-layout)
+  - [4. Automated Rate-Limiting Detection & Exponential Backoff](#4-automated-rate-limiting-detection--exponential-backoff)
+  - [5. Chunked Non-Blocking Rendering & Shimmer Skeletons](#5-chunked-non-blocking-rendering--shimmer-skeletons)
+  - [6. Deterministic Seeded Random Shuffling](#6-deterministic-seeded-random-shuffling)
+  - [7. PWA Support & 32-bit djb2 Content Hash Caching](#7-pwa-support--32-bit-djb2-content-hash-caching)
+  - [8. Iframe Health Observer & Graceful Fallback](#8-iframe-health-observer--graceful-fallback)
+  - [9. Single Post Isolated Preview Mode](#9-single-post-isolated-preview-mode)
+  - [10. Glassmorphism Loading Progress Panel](#10-glassmorphism-loading-progress-panel)
+  - [11. Global Console Noise Filter](#11-global-console-noise-filter)
+  - [12. FAQ & Diagnostic Accordion Modal](#12-faq--diagnostic-accordion-modal)
+- [Tech Stack & Specifications](#tech-stack--specifications)
+- [Project Directory & File Structure](#project-directory--file-structure)
+  - [File Listing](#file-listing)
+  - [Module Responsibilities](#module-responsibilities)
+- [System Architecture & Lifecycle Flows](#system-architecture--lifecycle-flows)
+  - [System Module Architecture Diagram](#system-module-architecture-diagram)
+  - [Post Load & Rate-Limiting Sequence Diagram](#post-load--rate-limiting-sequence-diagram)
+- [Configuration & Data Specifications](#configuration--data-specifications)
+  - [Runtime Configuration Table (RuntimeConfig)](#runtime-configuration-table-runtimeconfig)
+  - [Post Data Schema (PostItem)](#post-data-schema-postitem)
+  - [URL Query Parameters Specification (URLParams)](#url-query-parameters-specification-urlparams)
+- [Key Algorithms & Technical Deep Dive](#key-algorithms--technical-deep-dive)
+  - [1. Exponential Backoff Rate-Limiting Algorithm](#1-exponential-backoff-rate-limiting-algorithm)
+  - [2. 32-bit djb2 Content Hash Cache Invalidation](#2-32-bit-djb2-content-hash-cache-invalidation)
+  - [3. Deterministic Pseudo-Random Seeded Shuffle](#3-deterministic-pseudo-random-seeded-shuffle)
+  - [4. Dual Iframe Observers & Fallback Substitution](#4-dual-iframe-observers--fallback-substitution)
+- [FAQ & Troubleshooting](#faq--troubleshooting)
+- [Development & Deployment Guide](#development--deployment-guide)
+  - [Local Development Commands](#local-development-commands)
+  - [Static Hosting Deployment](#static-hosting-deployment)
+- [Changelog](#changelog)
+- [AI-Friendly Documentation (llm.txt)](#ai-friendly-documentation-llmtxt)
+- [License & Disclaimer](#license--disclaimer)
+
+---
+
+## Project Overview & Core Values
+
+Official Threads embed iframes provide rich social interactivity. However, when rendering multiple embeds simultaneously, web pages frequently suffer from cross-origin authentication failures, HTTP 429 rate-limiting (Too Many Requests), main-thread blocking, and layout jitter.
+
+**Threads Featured Posts** is engineered to eliminate these bottlenecks:
+
+| Core Value | Description |
+| :--- | :--- |
+| **Resilient Rate-Limit Defense** | Automatically catches HTTP 429 errors, pauses the loading queue with an exponential backoff countdown, and resumes automatically without page reloads. |
+| **Graceful Degradation Guarantee** | Seamlessly substitutes broken or blocked iframes (height under 200px) with fallback author cards and direct links. |
+| **Smooth Chunked Rendering** | Leverages `requestIdleCallback` and shimmer skeleton animations to ensure non-blocking DOM mounting, maintaining optimal INP metrics. |
+| **Instant Search & Tag Filtering** | Fast real-time fuzzy search matching authors, content, and hashtags with two-way URL query synchronization. |
+| **Offline Cache & PWA** | Automated version invalidation via 32-bit djb2 content hashing, supporting full standalone app installation on desktop and mobile. |
 
 ---
 
 ## Ecosystem & Integration
 
-This project works in tandem with [Threads Code Saver (threads-embedded-code)](https://github.com/Scorpio-meow/threads-embedded-code) to form a complete ecosystem for capturing, managing, and presenting Threads posts:
+This project acts as the **Presentation Layer (Downstream)** in tandem with the companion Chrome extension **[Threads Code Saver (threads-embedded-code)](https://github.com/Scorpio-meow/threads-embedded-code)**:
 
 ```mermaid
 flowchart LR
     subgraph Upstream ["Upstream Collector"]
         Collector["threads-embedded-code\n(Chrome Extension)"]
         Parser["Post DOM Parsing & Noise Sanitization"]
-        Export["Export Structured JSON/JS Data"]
+        Export["Export Featured Data (threads-featured-data-*.js)"]
         Collector --> Parser --> Export
     end
 
@@ -23,23 +103,27 @@ flowchart LR
         Config["config.js\n(Posts Dataset & Runtime Constants)"]
         Viewer["Threads-Featured-Posts\n(Static Web App)"]
         Engine["Rate Limit Backoff / Tag Search / Masonry"]
-        UI["Modern Presentation UI\n(Dark/Light Theme / PWA)"]
+        UI["Modern Presentation UI\n(Dark/Light Theme / PWA / Diagnostic Modal)"]
         Config --> Viewer --> Engine --> UI
     end
 
     Export -- "Copy data to overwrite posts array" --> Config
 ```
 
-1. **Data Collection (Upstream)**: Use the [threads-embedded-code](https://github.com/Scorpio-meow/threads-embedded-code) extension to capture posts while browsing Threads, automatically cleaning UI noise and exporting structured data.
-2. **Content Presentation (Downstream)**: This application reads [config.js](./config.js) data to deliver a robust, rate-limited, search-filtered, and responsive presentation page.
+1. **Upstream Collector**: Use [threads-embedded-code](https://github.com/Scorpio-meow/threads-embedded-code) to bookmark posts while browsing Threads, clicking "Export Featured Data" to produce structured objects without the `@` prefix.
+2. **Downstream Viewer**: Paste the exported array into [config.js](./config.js) in this project to instantly update your showcase site.
 
 ---
 
 ## Quick Start
 
-This is a pure front-end static project with zero compilation or complex dependencies. It runs on any static file server.
+### Prerequisites & Environment
 
-### 1. Clone Project
+- Any modern browser supporting modern web standards (Chrome, Edge, Safari, Firefox, Brave, Arc, etc.).
+- A local or remote static web server (Bun, Node.js, Python, or static hosting providers).
+- Zero compilation steps, zero bundlers, zero npm runtime dependencies.
+
+### 1. Clone Repository
 
 ```bash
 git clone https://github.com/Scorpio-meow/Threads-Featured-Posts.git
@@ -48,19 +132,23 @@ cd Threads-Featured-Posts
 
 ### 2. Configure Post Data
 
-Place Threads Embed Codes into the `posts` array in [config.js](./config.js). Using the companion browser extension is recommended:
+Open [config.js](./config.js) and update the `posts` array:
 
-1. **Install Companion Extension**:
-   ```bash
-   git clone https://github.com/Scorpio-meow/threads-embedded-code.git
-   ```
-   Open `chrome://extensions/` in your browser, enable Developer mode, and click "Load unpacked" to select the extension folder.
-2. **Export Posts**:
-   In the extension management dashboard, click "Export", copy the structured array data, and overwrite the `posts` array in [config.js](./config.js).
+```javascript
+const posts = [
+    {
+        embedCode: '<blockquote class="text-post-media" data-text-post-permalink="https://www.threads.com/@username/post/xxx">...</blockquote>',
+        postLink: 'https://www.threads.com/@username/post/xxx',
+        author: 'username',
+        content: 'Plain text content of the post...',
+        tags: ['JavaScript', 'WebDev']
+    }
+];
+```
 
 ### 3. Start Local Development Server
 
-Use Bun to launch a local static web server to preview the application:
+Using Bun to start a local static server is recommended:
 
 **Start with Bun (Recommended):**
 ```bash
@@ -72,113 +160,118 @@ bunx http-server -p 3000
 python -m http.server 3000
 ```
 
-Open your browser and navigate to `http://localhost:3000`.
+Navigate to `http://localhost:3000` in your browser.
 
 ---
 
 ## Core Features
 
-- **Search & Tag Filtering**: Real-time fuzzy matching search by author handle, post text, or hashtag. A top tag bar displays popular hashtags sorted by frequency with expand/collapse toggle support and two-way URL query parameter synchronization.
-- **Dark/Light Theme Switching**: Seamlessly toggle between Dark and Light themes with preference saved in `localStorage`. Full CSS custom property design system dynamically updates `blockquote` `data-theme` attributes upon switching.
-- **Flexible Layout Options**: Switch between multi-column Masonry Grid and single-column List layout. Masonry utilizes native CSS `columns` for responsive auto-adjustment.
-- **Automated Rate-Limiting Backoff**: Global interception of HTTP 429 errors and Threads script failures. Displays a real-time countdown banner during rate limiting and automatically resumes loading after exponential backoff (escalating 1.5x up to 300s).
-- **Non-Blocking Chunked Rendering**: Utilizes `requestIdleCallback` for non-blocking DOM rendering with shimmer skeleton placeholders to protect Interaction to Next Paint (INP) and eliminate UI jank.
-- **Deterministic Seeded Shuffle**: Supports one-click random sorting with seed timestamp generation stored in the `random` URL parameter, ensuring page pagination consistency across page reloads.
-- **PWA & Offline Support**: Service Worker caches essential static assets using djb2 content hashing for automated version cache updates. Includes [manifest.json](./manifest.json) for standalone app installation on desktop and mobile.
-- **Robust Iframe Monitoring**: `MutationObserver` and `ResizeObserver` monitor iframe health, performing graceful fallback (replacing failed embeds with fallback direct links) when height drops below 200px or timeouts occur.
-- **Single Post Preview Mode**: Direct URL routing via `?post=` parameter to isolate single post cards while automatically hiding global controls, search bar, and pagination.
-- **Loading Progress Panel**: Glassmorphism progress bar showing real-time load percentages, next embed countdowns, and estimated remaining loading duration.
-- **Console Noise Interceptor**: [console-filter.js](./console-filter.js) suppresses cross-origin 404 warnings and postMessage noise thrown by official Threads embed scripts.
-- **FAQ & Diagnostic Panel**: Integrated footer modal with accordion FAQ and one-click `?debug=1` toggle.
+### 1. Real-Time Search & Tag Filtering
+- **Real-Time Fuzzy Matching**: Instantly searches author handles, post text, and hashtags as you type.
+- **Frequency-Sorted Tag Bar**: Automatically ranks tags by frequency in descending order with expand/collapse toggle support.
+- **Two-Way URL State Sync**: Search terms (`?search=`) and active tags (`?tag=`) synchronize with URL query parameters for direct link sharing and bookmarking.
+
+### 2. Dual Theme System & CSS Design Tokens
+- **Dark / Light Mode Switching**: Instant header toggle with preference persistence in `localStorage`.
+- **Threads Embed Theme Sync**: Dynamically updates the `data-theme` attribute on all rendered `blockquote` elements upon theme switching.
+- **Centralized CSS Variables**: Palette, typography, border radiuses, and glassmorphism styling are managed via CSS Custom Properties in `styles.css`.
+
+### 3. Responsive CSS Masonry & Single-Column Layout
+- **Native CSS `columns` Masonry**: Employs CSS multi-column layouts to eliminate JavaScript reflow lag, dynamically adapting from 3 columns (desktop) to 2 columns (tablet) and 1 column (mobile).
+- **Single-Column Focus Mode**: One-click toggle in the toolbar to switch to a centered list view for in-depth code reading.
+
+### 4. Automated Rate-Limiting Detection & Exponential Backoff
+- **HTTP 429 Error Interception**: `console-filter.js` traps official script 429 warnings and dispatches global custom events.
+- **Countdown Banner & Queue Pause**: Renders a live countdown banner on the progress panel and halts subsequent embed rendering.
+- **Exponential Scaling**: Starts with a base 60-second backoff, scaling 1.5x on consecutive occurrences (up to 300s ceiling), safely resuming after timer expiry.
+
+### 5. Chunked Non-Blocking Rendering & Shimmer Skeletons
+- **requestIdleCallback Scheduling**: Mounts post card DOM elements during browser idle periods to prevent main-thread UI jank and improve Interaction to Next Paint (INP).
+- **Shimmer Placeholder Animations**: Displays smooth skeleton placeholders prior to embed resolution.
+
+### 6. Deterministic Seeded Random Shuffling
+- **Timestamp Seed Generation**: Generates a timestamp seed stored in the URL (`?random=<seed>`).
+- **Pagination & Refresh Consistency**: Uses a seeded pseudo-random formula ensuring identical post ordering across pagination clicks and browser reloads.
+
+### 7. PWA Support & 32-bit djb2 Content Hash Caching
+- **Progressive Web App**: Complete with `manifest.json` and Service Worker for desktop and mobile home screen installation.
+- **Automatic djb2 Cache Invalidation**: The Service Worker reads core source files and hashes their content using a 32-bit djb2 algorithm, automatically clearing stale caches when code changes.
+
+### 8. Iframe Health Observer & Graceful Fallback
+- **MutationObserver + ResizeObserver**: Monitors iframe generation and rendered height.
+- **Automated Fallback**: If an iframe fails to render, times out (exceeding `IFRAME_TIMEOUT`), or stays under 200px in height, it is replaced with a fallback card containing author info and a direct Threads link.
+
+### 9. Single Post Isolated Preview Mode
+- **Direct URL Parameter Routing**: Navigate via `?post=<URL>` or `?post=<Index>` to isolate an individual post while hiding header controls, tag bars, and pagination.
+- **One-Click Share URL**: Built-in button to copy the direct sharing link.
+
+### 10. Glassmorphism Loading Progress Panel
+- **Telemetry Metrics**: Shows overall page load percentage, current post duration, next post countdown, and estimated total remaining duration.
+- **Glassmorphism Aesthetic**: Modern frosted glass backdrop that remains visually unobtrusive.
+
+### 11. Global Console Noise Filter
+- **Noise Suppression**: `console-filter.js` filters out cross-origin 404 warnings, missing favicon alerts, and irrelevant postMessage events emitted by Meta embed scripts.
+
+### 12. FAQ & Diagnostic Accordion Modal
+- **Embedded FAQ Dialog**: Accordion modal covering login authentication, Do Not Track issues, and rate limit best practices.
+- **One-Click Debug Mode**: Toggle `?debug=1` directly from the UI to unmask all console warnings and timing logs.
 
 ---
 
-## Configuration & Data Formats
+## Tech Stack & Specifications
 
-### Runtime Configuration Settings
-
-Adjust runtime constants in [config.js](./config.js):
-
-| Setting | Type | Default | Description |
-| :--- | :---: | :---: | :--- |
-| `LOAD_DELAY` | number | `4000` | Base load delay (ms) between embed loads (safety bound: 4000ms) |
-| `BATCH_SIZE` | number | `1` | Concurrent iframe loads limit (capped at 1 to prevent 429 limits) |
-| `EMBED_STAGGER_DELAY` | number | `3600` | Stagger interval (ms) between adjacent embed requests (safety bound: 3600ms) |
-| `IFRAME_TIMEOUT` | number | `3600` | Single iframe load timeout duration threshold (ms) |
-| `MIN_IFRAME_TIMEOUT` | number | `8000` | Threshold (ms) before initial iframe presence check |
-| `RATE_LIMIT_BACKOFF` | number | `60000` | Base backoff (ms) on HTTP 429 (escalates by 1.5x up to 300s) |
-| `MAX_DELAY` | number | `60000` | Dynamic delay ceiling (ms) |
-| `MIN_DELAY_BETWEEN_REQUESTS` | number | `3600` | Minimum safety interval between embed requests (ms) |
-| `MAX_VISIBLE_QUEUE` | number | `30` | Maximum post DOM elements retained in active memory |
-| `PAGE_SIZE_OPTIONS` | number[] | `[1, 3, 5, 10, 25, 50]` | Allowed items per page options array |
-| `PAGE_SIZE` | number | `10` | Default number of items per page |
-
-### Post Data Schema
-
-[config.js](./config.js) supports two formats in the `posts` array:
-
-#### Structured Object Format (Recommended)
-
-```javascript
-const posts = [
-    {
-        embedCode: '<blockquote class="text-post-media" data-text-post-permalink="https://www.threads.com/@username/post/xxx">...</blockquote>',
-        postLink: 'https://www.threads.com/@username/post/xxx',
-        author: 'username',
-        content: 'Post text content...',
-        tags: ['tag1', 'tag2']
-    }
-];
 ```
-
-#### Raw HTML String Format (Legacy Compatibility)
-
-```javascript
-const posts = [
-    '<blockquote class="text-post-media" data-text-post-permalink="https://www.threads.com/@username/post/xxx">...</blockquote>'
-];
++-----------------------------------------------------------------------+
+|                         Technical Standards                           |
++-----------------------------------------------------------------------+
+|  Frontend Core    | Vanilla JavaScript (ES6+), HTML5, CSS3 Variables  |
+|  Typography       | Google Fonts (Manrope, Noto Sans TC)              |
+|  Layout Engine    | Native CSS Columns Masonry + CSS Grid + Flexbox   |
+|  Offline Cache    | Service Worker API (32-bit djb2 Auto Invalidation)|
+|  App Delivery     | Progressive Web App (Web App Manifest)            |
+|  Dependencies     | 0 External Runtime Dependencies                   |
+|  Hosting Target   | Any static web host (GitHub Pages, Vercel, etc.)  |
++-----------------------------------------------------------------------+
 ```
-
-### TypeScript Interface
-
-```typescript
-interface PostItem {
-    embedCode: string;   // Threads blockquote embed HTML code
-    postLink: string;    // Full URL to the original Threads post
-    author: string;      // Author username without @
-    content: string;     // Extracted plain text content
-    tags: string[];      // Array of hashtag keywords
-}
-```
-
-### URL Query Parameters
-
-| Parameter | Type | Example | Description |
-| :--- | :---: | :--- | :--- |
-| `page` | integer | `?page=2` | Target page number |
-| `page_size` | integer | `?page_size=25` | Number of items per page |
-| `random` | string | `?random=1717750000000` | Seed timestamp for deterministic random shuffle |
-| `search` | string | `?search=frontend` | Search keyword matching author, content, or tags |
-| `tag` | string | `?tag=tech` | Exact tag filtering (excluding `#`) |
-| `post` | string | `?post=https://www.threads.com/@username/post/xxx` | Single post preview mode (URL or index) |
-| `debug` | string | `?debug=1` | Enable full logging and bypass console filtering |
 
 ---
 
-## Architecture & Technical Details
+## Project Directory & File Structure
 
-### Tech Stack
+### File Listing
 
-| Category | Technology | Description |
+```
+Threads-Featured-Posts/
+├── index.html            # Main semantic HTML structure & modals
+├── config.js             # Posts dataset (posts array) & runtime constants
+├── threads-loader.js     # Core runtime controller (queue, backoff, DOM, metrics)
+├── console-filter.js     # Error interceptor (suppress 404 noise, trap 429 events)
+├── styles.css            # Design token system (CSS variables, masonry, themes)
+├── sw.js                 # PWA Service Worker (djb2 hash invalidation, offline cache)
+├── manifest.json         # PWA Manifest specification
+├── assets/               # Static icon assets (Favicon, App Icons)
+├── llm.txt               # AI-friendly architecture & RAG indexing specification
+├── README_EN.md          # English documentation (This file)
+└── README.md             # Traditional Chinese documentation
+```
+
+### Module Responsibilities
+
+| File Path | Layer | Key Responsibilities |
 | :--- | :--- | :--- |
-| **Frontend Core** | HTML5 / CSS3 / Vanilla JavaScript | Zero third-party heavy frameworks |
-| **Typography** | Google Fonts (Manrope, Noto Sans TC) | Clean geometric aesthetic with CJK readability |
-| **Styling** | Native CSS Variables / Glassmorphism / CSS `columns` | Theme switching and fluid responsive masonry |
-| **Offline Cache** | Service Worker API / Cache Storage API | Automated cache invalidation via djb2 content hashing |
-| **App Delivery** | Web App Manifest (PWA) | Standalone desktop and mobile install support |
-| **Hosting** | Any static Web Server | GitHub Pages, Cloudflare Pages, Vercel, Netlify |
+| `index.html` | View Layer | Declares semantic HTML layout, search inputs, theme toggles, pagination, and modals. |
+| `config.js` | Data & Config Layer | Stores the posts dataset array and 11 runtime configuration constants. |
+| `threads-loader.js` | Controller Layer | Manages URL routing, pagination, queue scheduling, backoff timers, DOM rendering, and fallbacks. |
+| `console-filter.js` | Interceptor Layer | Intercepts console logs, suppresses 404 warnings, and fires rate-limit custom events. |
+| `styles.css` | Styling Layer | Defines CSS custom properties, dark/light themes, masonry columns, and animations. |
+| `sw.js` | Service Worker Layer | Implements djb2 hash versioning for cache busting and offline asset serving. |
+| `llm.txt` | AI Specification Layer | Provides structured project metadata and algorithm specifications for AI agents. |
 
-### Module Architecture
+---
+
+## System Architecture & Lifecycle Flows
+
+### System Module Architecture Diagram
 
 ```mermaid
 flowchart TD
@@ -210,7 +303,7 @@ flowchart TD
     SW -- "Cache static assets & intercept fetch" --> HTML
 ```
 
-### Post Load & Rate Limit Lifecycle
+### Post Load & Rate-Limiting Sequence Diagram
 
 ```mermaid
 sequenceDiagram
@@ -245,25 +338,223 @@ sequenceDiagram
 
 ---
 
-## FAQ & Troubleshooting
+## Configuration & Data Specifications
 
-### Q1: Why do some post cards only display a "View on Threads" button?
-This is due to Threads' cross-origin and anti-scraping protections. To display official embed cards:
-1. Ensure you are logged into [Threads](https://www.threads.com/) in your browser.
-2. Disable "Do Not Track" in browser privacy settings (it blocks Meta embed authentication cookies).
-3. Whitelist `cdninstagram.com` and `threads.com` in ad blockers (e.g. uBlock Origin).
+### Runtime Configuration Table (RuntimeConfig)
 
-### Q2: What is "Rate Limiting" and how does the application handle it?
-When requesting multiple embed iframes rapidly, Meta's server responds with HTTP 429. The application automatically:
-- Pops up a countdown banner and pauses subsequent queue processing.
-- Automatically resumes loading after the exponential backoff duration expires.
-- To reduce rate limit occurrences, decrease `PAGE_SIZE` (e.g. 3 or 5) or increase `LOAD_DELAY` and `EMBED_STAGGER_DELAY` in [config.js](./config.js).
+Customizable constants in [config.js](./config.js):
 
-### Q3: How to enable debug mode?
-Append `?debug=1` to the URL (e.g., `http://localhost:3000/?debug=1`) to view unfiltered cross-origin warnings and scheduling diagnostics in the browser console (F12).
+| Setting Constant | Type | Default | Description & Best Practice |
+| :--- | :---: | :---: | :--- |
+| `LOAD_DELAY` | number | `4000` | Base load delay between embed requests (ms). Maintain >= 4000ms. |
+| `BATCH_SIZE` | number | `1` | Maximum concurrent iframe loads. Keep at 1 to prevent 429 rate limits. |
+| `EMBED_STAGGER_DELAY` | number | `3600` | Stagger interval between adjacent embed loads (ms). Safety threshold: 3600ms. |
+| `IFRAME_TIMEOUT` | number | `3600` | Timeout threshold for individual iframe renders (ms). Triggers fallback on expiry. |
+| `MIN_IFRAME_TIMEOUT` | number | `8000` | Initial presence check safety duration (ms). |
+| `RATE_LIMIT_BACKOFF` | number | `60000` | Base backoff on 429 error (ms). Escalates by 1.5x up to 300s ceiling. |
+| `MAX_DELAY` | number | `60000` | Upper ceiling for dynamic delay calculation (ms). |
+| `MIN_DELAY_BETWEEN_REQUESTS` | number | `3600` | Minimum safety interval between consecutive requests (ms). |
+| `MAX_VISIBLE_QUEUE` | number | `30` | Maximum post DOM elements retained in active memory. |
+| `PAGE_SIZE_OPTIONS` | number[] | `[1, 3, 5, 10, 25, 50]` | Selectable options in the page size dropdown. |
+| `PAGE_SIZE` | number | `10` | Default number of items rendered per page. |
+
+### Post Data Schema (PostItem)
+
+TypeScript interface for items in the `posts` array:
+
+```typescript
+interface PostItem {
+  /** Threads official blockquote HTML string */
+  embedCode: string;
+
+  /** Full original URL to the Threads post */
+  postLink: string;
+
+  /** Author username handle without @ */
+  author: string;
+
+  /** Plaintext post content */
+  content: string;
+
+  /** Array of hashtag keywords */
+  tags: string[];
+}
+```
+
+### URL Query Parameters Specification (URLParams)
+
+| Parameter | Type | Example | Description |
+| :--- | :---: | :--- | :--- |
+| `page` | integer | `?page=2` | Target page index (1-based). |
+| `page_size` | integer | `?page_size=25` | Number of items per page. |
+| `random` | string | `?random=1717750000000` | Timestamp seed for deterministic random shuffle. |
+| `search` | string | `?search=frontend` | Search keyword matching author, content, or tags. |
+| `tag` | string | `?tag=React` | Exact hashtag filter (excluding `#`). |
+| `post` | string | `?post=https://www.threads.com/@username/post/xxx` | Single post preview mode (URL or index). |
+| `debug` | string | `?debug=1` | Enable debug logging in console. |
 
 ---
 
-## License
+## Key Algorithms & Technical Deep Dive
 
-This project is open source and available under the [MIT License](./LICENSE).
+### 1. Exponential Backoff Rate-Limiting Algorithm
+
+When Meta returns HTTP 429, the system halts queue execution and computes escalating delays:
+
+```javascript
+function handleRateLimitDetected(detail) {
+  rateLimitDetected = true;
+  var backoffDuration = currentBackoff; // Default 60000ms
+  rateLimitEndTime = Date.now() + backoffDuration;
+  
+  // Exponentially scale subsequent backoff (capped at 300s)
+  currentBackoff = Math.min(MAX_BACKOFF_CEILING, currentBackoff * 1.5);
+  
+  createOrUpdateProgressPanel();
+  setTimeout(function() {
+    rateLimitDetected = false;
+    resumeQueueProcessing();
+  }, backoffDuration);
+}
+```
+
+### 2. 32-bit djb2 Content Hash Cache Invalidation
+
+In `sw.js`, a 32-bit hash is computed across core source files:
+
+```javascript
+function djb2Hash(str) {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash) ^ str.charCodeAt(i);
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  return (hash >>> 0).toString(16);
+}
+```
+
+### 3. Deterministic Pseudo-Random Seeded Shuffle
+
+Ensures consistent post ordering across page reloads and pagination:
+
+```javascript
+function seededRandom(seed) {
+  var x = Math.sin(seed++) * 10000;
+  return x - Math.floor(x);
+}
+function shuffleArrayWithSeed(array, seed) {
+  var m = array.length, t, i;
+  var currentSeed = parseInt(seed, 10) || 1;
+  while (m) {
+    i = Math.floor(seededRandom(currentSeed++) * m--);
+    t = array[m];
+    array[m] = array[i];
+    array[i] = t;
+  }
+  return array;
+}
+```
+
+### 4. Dual Iframe Observers & Fallback Substitution
+
+To handle blocked iframes without breaking page layouts:
+
+1. **MutationObserver** traps iframe creation inside embed wrappers.
+2. **ResizeObserver** monitors rendered height; if height remains under 200px upon timeout, it is swapped for a graceful fallback card.
+
+---
+
+## FAQ & Troubleshooting
+
+> [!WARNING]
+> **Issue 1: Why do some post cards only display a "View on Threads" button?**
+> - This is caused by Threads' cross-origin anti-scraping protections.
+> - Ensure your browser is logged into [Threads](https://www.threads.com/).
+> - Disable "Do Not Track" in browser privacy settings (it blocks Meta embed authentication cookies).
+> - Whitelist `cdninstagram.com` and `threads.com` in ad blockers (e.g. uBlock Origin).
+
+> [!NOTE]
+> **Issue 2: What is "Rate Limiting" and how does the application handle it?**
+> - Rapid embed requests trigger HTTP 429 from Meta.
+> - The application automatically displays a countdown banner, pauses the queue, and resumes after exponential backoff.
+> - To minimize rate limits, decrease `PAGE_SIZE` (e.g. 3 or 5) or increase `LOAD_DELAY` and `EMBED_STAGGER_DELAY` in [config.js](./config.js).
+
+> [!TIP]
+> **Issue 3: How to enable debug mode?**
+> - Append `?debug=1` to the URL (e.g., `http://localhost:3000/?debug=1`).
+> - Unmasked cross-origin warnings and scheduling diagnostics will display in the developer console (F12).
+
+---
+
+## Development & Deployment Guide
+
+### Local Development Commands
+
+Pure front-end static architecture with zero build steps:
+
+```bash
+# Clone repository
+git clone https://github.com/Scorpio-meow/Threads-Featured-Posts.git
+cd Threads-Featured-Posts
+
+# Start static server using Bun
+bunx http-server -p 3000
+```
+
+### Static Hosting Deployment
+
+Deploy directly to any static web host:
+
+- **GitHub Pages**: Set repository Settings -> Pages to deploy from root of `main` branch.
+- **Cloudflare Pages**: Connect Git repository, leave Build command empty, set Output directory to `/`.
+- **Vercel / Netlify**: Drag-and-drop folder or connect Git repository for instant deployment.
+
+---
+
+## Changelog
+
+Follows the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
+
+### [Unreleased]
+
+#### Added
+- Comprehensive Exponential Rate-Limiting Backoff defense against HTTP 429 limits.
+- Glassmorphism loading progress tracker showing percentage, elapsed time, and ETA.
+- 32-bit djb2 content hash automated Service Worker cache invalidation.
+- Single post isolated preview mode (`?post=`) and deterministic seeded shuffle (`?random=`).
+- Footer FAQ accordion diagnostic modal.
+
+#### Changed
+- Refactored masonry layout to native CSS `columns` for smoother scrolling performance.
+- Upgraded dual theme system with dynamic CSS custom properties and `blockquote` `data-theme` synchronization.
+- Enhanced `console-filter.js` interceptors to suppress 404 noise and cross-origin postMessage warnings.
+
+---
+
+## AI-Friendly Documentation (llm.txt)
+
+This project provides a standalone **[llm.txt](./llm.txt)** file designed for AI agents, LLM search engines, and RAG indexing pipelines:
+
+- File location: `llm.txt`
+- Contents: System architecture, runtime configuration schema, data models, and detailed algorithm specifications.
+
+---
+
+## License & Disclaimer
+
+### License
+
+This project is licensed under the **[MIT License](https://opensource.org/licenses/MIT)**. You are free to use, modify, distribute, and integrate it into private or commercial projects.
+
+### Disclaimer
+
+This is an independent open-source project and is not affiliated with, authorized, or endorsed by Meta or Threads. Intellectual property rights for embedded content belong to their respective authors and Meta.
+
+---
+
+<div align="center">
+
+**Threads Featured Posts**  
+Developed and maintained by [Scorpio-meow](https://github.com/Scorpio-meow)
+
+</div>
