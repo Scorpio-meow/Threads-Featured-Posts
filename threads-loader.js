@@ -72,14 +72,12 @@
         }
         var nextPostValStr = completed === total ? '已完成' : nextPostRemain.toFixed(1) + ' 秒';
         var totalRemainValStr = completed === total ? '已完成' : totalRemain.toFixed(1) + ' 秒';
-
         var currentPostLoadTimeStr = '等待中';
         if (completed === total && total > 0) {
             currentPostLoadTimeStr = '已完成';
         } else if (inFlight > 0) {
             currentPostLoadTimeStr = currentActiveElapsed.toFixed(1) + ' 秒';
         }
-
         var rateLimitAlert = '';
         if (rateLimitRemain > 0) {
             rateLimitAlert = '<div style="color: var(--error); font-weight: bold; margin-top: 8px; font-size: 0.85rem; animation: fallbackPulse 1.5s infinite;">偵測到速率限制，暫停中... 剩餘 ' + rateLimitRemain.toFixed(1) + ' 秒</div>';
@@ -639,7 +637,6 @@
                 if (shareBtn) {
                     postItem.appendChild(shareBtn);
                 }
-
                 var reasonText = '載入逾時，或該貼文來自私密、停用、受年齡限制或地區限制的帳號';
                 if (failureReason === 'xframe-deny') {
                     reasonText = '瀏覽器安全設定限制載入 (X-Frame)';
@@ -648,27 +645,38 @@
                 } else if (failureReason === 'rate-limit') {
                     reasonText = '已達 Threads 流量限制';
                 }
-
                 var fallbackContainer = document.createElement('div');
                 fallbackContainer.className = 'embed-error-fallback';
-                fallbackContainer.innerHTML =
-                    '<div class="fallback-icon">' +
-                    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-                    '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>' +
-                    '<line x1="12" y1="9" x2="12" y2="13"></line>' +
-                    '<line x1="12" y1="17" x2="12.01" y2="17"></line>' +
-                    '</svg>' +
-                    '</div>' +
-                    '<div class="fallback-title">貼文載入失敗</div>' +
-                    '<div class="fallback-reason">' + reasonText + '</div>' +
-                    '<a class="fallback-btn" href="' + fallbackUrl + '" target="_blank" rel="noopener noreferrer">' +
-                    '<span>在 Threads 上查看</span>' +
-                    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
-                    '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>' +
-                    '<polyline points="15 3 21 3 21 9"></polyline>' +
-                    '<line x1="10" y1="14" x2="21" y2="3"></line>' +
-                    '</svg>' +
-                    '</a>';
+                var iconDiv = document.createElement('div');
+                iconDiv.className = 'fallback-icon';
+                iconDiv.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>';
+                fallbackContainer.appendChild(iconDiv);
+                var titleDiv = document.createElement('div');
+                titleDiv.className = 'fallback-title';
+                titleDiv.textContent = '貼文載入失敗';
+                fallbackContainer.appendChild(titleDiv);
+                var reasonDiv = document.createElement('div');
+                reasonDiv.className = 'fallback-reason';
+                reasonDiv.textContent = reasonText;
+                fallbackContainer.appendChild(reasonDiv);
+                var safeFallbackUrl = '#';
+                if (/^https?:\/\//i.test(fallbackUrl)) {
+                    safeFallbackUrl = fallbackUrl;
+                }
+                var fallbackBtn = document.createElement('a');
+                fallbackBtn.className = 'fallback-btn';
+                fallbackBtn.href = safeFallbackUrl;
+                fallbackBtn.target = '_blank';
+                fallbackBtn.rel = 'noopener noreferrer';
+                var btnSpan = document.createElement('span');
+                btnSpan.textContent = '在 Threads 上查看';
+                fallbackBtn.appendChild(btnSpan);
+                var btnSvg = document.createElement('span');
+                btnSvg.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>';
+                if (btnSvg.firstElementChild) {
+                    fallbackBtn.appendChild(btnSvg.firstElementChild);
+                }
+                fallbackContainer.appendChild(fallbackBtn);
                 postItem.appendChild(fallbackContainer);
             }
         } catch (e) { }
@@ -1702,12 +1710,15 @@
                     backUrl.searchParams.delete('post');
                     backUrl.searchParams.delete('page');
                     backUrl.searchParams.delete('page_size');
-                    backBanner.innerHTML =
-                        '<a class="single-post-banner__back" href="' + backUrl.toString() + '">' +
-                        '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>' +
-                        '回到完整列表' +
-                        '</a>' +
-                        '<span class="single-post-banner__label">單篇預覽</span>';
+                    var backLink = document.createElement('a');
+                    backLink.className = 'single-post-banner__back';
+                    backLink.href = backUrl.toString();
+                    backLink.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>回到完整列表';
+                    var backLabel = document.createElement('span');
+                    backLabel.className = 'single-post-banner__label';
+                    backLabel.textContent = '單篇預覽';
+                    backBanner.appendChild(backLink);
+                    backBanner.appendChild(backLabel);
                     container.insertBefore(backBanner, singleItem);
                     requestAnimationFrame(function () {
                         var bq = container.querySelector('blockquote.text-post-media');
@@ -1796,7 +1807,6 @@
             }
             faqTrigger.addEventListener('click', openFaqModal);
             faqClose.addEventListener('click', closeFaqModal);
-
             faqModal.addEventListener('click', function (e) {
                 if (e.target === faqModal) {
                     closeFaqModal();
