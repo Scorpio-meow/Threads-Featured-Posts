@@ -148,19 +148,22 @@ const posts = [
 
 ### 3. Start Local Development Server
 
-Using Bun to start a local static server is recommended:
+You can choose any of the following methods to preview the project locally:
 
-**Start with Bun (Recommended):**
+**Method A: VS Code / IDE "Live Server" Extension (Easiest)**
+- Install the "Live Server" extension in VS Code.
+- Right-click `index.html` and select "**Open with Live Server**" (default: `http://127.0.0.1:5500`).
+
+**Method B: Start with Bun (Recommended CLI)**
 ```bash
 bunx http-server -p 3000
 ```
+Open `http://localhost:3000` in your browser.
 
-**Start with Python (Fallback):**
+**Method C: Start with Python (Fallback CLI)**
 ```bash
 python -m http.server 3000
 ```
-
-Navigate to `http://localhost:3000` in your browser.
 
 ---
 
@@ -496,10 +499,18 @@ Pure front-end static architecture with zero build steps:
 # Clone repository
 git clone https://github.com/Scorpio-meow/Threads-Featured-Posts.git
 cd Threads-Featured-Posts
-
-# Start static server using Bun
-bunx http-server -p 3000
 ```
+
+**Server Execution Options:**
+1. **VS Code / IDE Live Server**: Right-click `index.html` and select "Open with Live Server".
+2. **Bun Static Server**:
+   ```bash
+   bunx http-server -p 3000
+   ```
+3. **Python Static Server**:
+   ```bash
+   python -m http.server 3000
+   ```
 
 ### Static Hosting Deployment
 
@@ -529,13 +540,21 @@ Follows the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
 - Upgraded dual theme system with dynamic CSS custom properties and `blockquote` `data-theme` synchronization.
 - Enhanced `console-filter.js` interceptors to suppress 404 noise and cross-origin postMessage warnings.
 
+#### Fixed
+- Removed forced minimum height constraints for embedded posts on mobile viewports for cleaner presentation.
+- Fixed abnormal bottom whitespace margin in single post isolated preview mode.
+
+#### Security
+- Resolved CodeQL static analysis alerts for DOM XSS by sanitizing dynamic text nodes and using safe property assignments.
+- Fixed XSS vulnerability in `threads-loader.js` caused by re-parsing DOM text nodes as raw HTML.
+
 ---
 
-## AI-Friendly Documentation (llm.txt)
+## AI-Friendly Documentation (llms.txt / llm.txt)
 
-This project provides a standalone **[llm.txt](./llm.txt)** file designed for AI agents, LLM search engines, and RAG indexing pipelines:
+This project provides standardized **[llms.txt](./llms.txt)** (and backward-compatible **[llm.txt](./llm.txt)**) files designed for AI agents, LLM search engines, and RAG indexing pipelines:
 
-- File location: `llm.txt`
+- File location: `llms.txt` / `llm.txt`
 - Contents: System architecture, runtime configuration schema, data models, and detailed algorithm specifications.
 
 ---

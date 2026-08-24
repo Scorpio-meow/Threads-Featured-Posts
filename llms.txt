@@ -15,7 +15,7 @@
 - manifest.json: Web App Manifest specification for desktop and mobile home screen installation.
 - README.md: Comprehensive Traditional Chinese documentation with architecture diagrams, runtime configuration tables, and developer guide.
 - README_EN.md: Comprehensive English documentation mirroring the full architectural and technical specification.
-- llm.txt: This file, providing structured technical specifications for AI agents and LLM/RAG indexing pipelines.
+- llms.txt: Structured technical specifications for AI agents and LLM/RAG indexing pipelines.
 
 ## Data Types & Schema
 
@@ -106,34 +106,35 @@ interface URLParams {
 ## Key Algorithms & Operational Mechanisms
 
 ### 1. Exponential Rate-Limiting Backoff
-- console-filter.js intercepts 429, rate limit, or too many requests patterns and dispatches the threads:rate-limit event.
-- threads-loader.js catches the event, immediately pauses the queue, shows a live countdown banner on the progress panel, and calculates backoff time (currentBackoff * 1.5 up to 300s).
+- console-filter.js intercepts 429, rate limit, or too many requests patterns and dispatches the `threads:rate-limit` event.
+- threads-loader.js catches the event, immediately pauses the queue, shows a live countdown banner on the progress panel, and calculates backoff time (`currentBackoff * 1.5` up to 300s).
 - Once the timer expires, the queue safely resumes loading remaining embeds.
 
 ### 2. Chunked Non-Blocking DOM Rendering with Shimmer Skeletons
-- Uses requestIdleCallback (with setTimeout fallback) to mount DOM cards without blocking main-thread user interactions, keeping Interaction to Next Paint (INP) minimal.
+- Uses `requestIdleCallback` (with `setTimeout` fallback) to mount DOM cards without blocking main-thread user interactions, keeping Interaction to Next Paint (INP) minimal.
 - Displays skeleton placeholders with shimmer CSS animations to maintain visual stability before embed resolution.
 
 ### 3. Deterministic Seeded Pseudo-Random Shuffle
-- Shuffling generates a timestamp seed preserved in URL ?random=<seed>.
+- Shuffling generates a timestamp seed preserved in URL `?random=<seed>`.
 - A linear congruential generator uses this seed to guarantee identical post sorting order during pagination and page refresh.
 
 ### 4. Iframe Health Observers & Graceful Fallback
-- Uses MutationObserver to watch iframe insertion and ResizeObserver to monitor rendered height.
+- Uses `MutationObserver` to watch iframe insertion and `ResizeObserver` to monitor rendered height.
 - If an iframe fails to render, times out, or stays under 200px height (indicating block/error), it is gracefully replaced with a fallback card containing author info and direct Threads link.
 
 ### 5. 32-bit djb2 Dynamic Service Worker Cache Invalidation
-- sw.js reads source code of core files (index.html, styles.css, threads-loader.js, config.js, console-filter.js, manifest.json), computes a unified 32-bit djb2 hash, and creates versioned caches automatically.
+- `sw.js` reads source code of core files (index.html, styles.css, threads-loader.js, config.js, console-filter.js, manifest.json), computes a unified 32-bit djb2 hash, and creates versioned caches automatically.
 - Any file modifications trigger cache recreation and stale cache deletion on install/activate.
 
+### 6. DOM Security & Safe Rendering
+- Strict protection against DOM XSS: User-supplied and dataset text strings are rendered using text nodes or safe attribute bindings rather than raw `innerHTML`.
+- Dynamic style attributes use validated values to prevent script injection.
+
 ## Development & Serving Commands
-- Static server execution via Bun (Preferred):
+- VS Code Live Server extension: Open `index.html` via "Open with Live Server" (`http://127.0.0.1:5500`).
+- Static server execution via Bun (CLI):
   ```bash
   bunx http-server -p 3000
-  ```
-- Static server execution via Python (Fallback):
-  ```bash
-  python -m http.server 3000
   ```
 - Access application:
   http://localhost:3000
@@ -141,4 +142,4 @@ interface URLParams {
 ## Known Constraints & Troubleshooting
 - Threads Embed Authentication: Official Threads embed iframes require the user's browser to be logged into Threads and "Do Not Track" to be disabled; otherwise fallback links are displayed.
 - Rate Limiting Defense: Maintain BATCH_SIZE = 1 and EMBED_STAGGER_DELAY >= 3600 in config.js to ensure long-term uninterrupted embed rendering.
-- Diagnostic Mode: Append ?debug=1 to the URL to view unmasked console errors and timing telemetry.
+- Diagnostic Mode: Append `?debug=1` to the URL to view unmasked console errors and timing telemetry.

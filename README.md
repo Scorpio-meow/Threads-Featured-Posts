@@ -148,19 +148,22 @@ const posts = [
 
 ### 3. 啟動本機開發伺服器
 
-建議使用 Bun 快速啟動靜態伺服器預覽專案：
+可選擇以下任一種方式啟動本機伺服器以預覽專案：
 
-**使用 Bun 啟動（優先推薦）：**
+**方式 A：使用 VS Code / IDE 的「Live Server」擴充功能（最簡便）**
+- 安裝「Live Server」擴充功能。
+- 在 `index.html` 上按右鍵，選擇「**Open with Live Server**」（預設開啟 `http://127.0.0.1:5500`）。
+
+**方式 B：使用 Bun 啟動（終端機指令推薦）**
 ```bash
 bunx http-server -p 3000
 ```
+啟動後於瀏覽器開啟 `http://localhost:3000` 即可預覽。
 
-**使用 Python 啟動（備用方案）：**
+**方式 C：使用 Python 啟動（備用方案）**
 ```bash
 python -m http.server 3000
 ```
-
-啟動後於瀏覽器開啟 `http://localhost:3000` 即可預覽。
 
 ---
 
@@ -498,10 +501,18 @@ function shuffleArrayWithSeed(array, seed) {
 # 複製專案庫
 git clone https://github.com/Scorpio-meow/Threads-Featured-Posts.git
 cd Threads-Featured-Posts
-
-# 優先推薦使用 Bun 啟動本地靜態伺服器
-bunx http-server -p 3000
 ```
+
+**伺服器啟動方式：**
+1. **VS Code / IDE Live Server**：右鍵點擊 `index.html` 選擇「Open with Live Server」。
+2. **Bun 靜態伺服器**：
+   ```bash
+   bunx http-server -p 3000
+   ```
+3. **Python 靜態伺服器**：
+   ```bash
+   python -m http.server 3000
+   ```
 
 ### 靜態託管部署
 
@@ -531,13 +542,21 @@ bunx http-server -p 3000
 - 升級深淺主題色彩系統，支援全域 CSS 自訂屬性動態切換與 blockquote data-theme 屬性聯動。
 - 擴充 `console-filter.js` 攔截規則，抑制 404 與 cross-origin postMessage 雜訊。
 
+#### 修正
+- 移除手機版貼文嵌入的強制最小高度限制，使行動裝置閱讀體驗更緊湊貼合。
+- 修正單篇隔離預覽模式下頁面底部留白異常的問題。
+
+#### 安全性
+- 全面修復 CodeQL 靜態分析指出的 DOM XSS 潛在風險，所有動態文字節點與屬性全數改為安全賦值。
+- 修復 `threads-loader.js` 中將 DOM 文字重新解析為 HTML 時可能引發的 XSS 漏洞。
+
 ---
 
-## AI 友善文件說明 (llm.txt)
+## AI 友善文件說明 (llms.txt / llm.txt)
 
-本專案已在根目錄提供獨立的 **[llm.txt](./llm.txt)** 規格文件，專供 AI 代理、LLM 檢索工具與 RAG 索引系統快速讀取與結構化解析：
+本專案已在根目錄提供標準的 **[llms.txt](./llms.txt)** (與相容的 **[llm.txt](./llm.txt)**) 規格文件，專供 AI 代理、LLM 檢索工具與 RAG 索引系統快速讀取與結構化解析：
 
-- 獨立文件路徑：`llm.txt`
+- 獨立文件路徑：`llms.txt` / `llm.txt`
 - 包含內容：專案架構、常數配置 Schema、資料模型介面、5 大核心演算法及運行機制。
 
 ---
