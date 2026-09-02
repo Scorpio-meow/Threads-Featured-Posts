@@ -45,21 +45,18 @@
         var totalRemain = 0;
         var currentActiveElapsed = 0;
         if (completed < total) {
-            var remainingUnstarted = total - currentIndex;
+            var remainingUnstarted = Math.max(0, total - currentIndex);
             var perPostTime = avgLoadTime + (staggerMs / 1000);
             if (rateLimitRemain > 0) {
                 totalRemain = rateLimitRemain + (remainingUnstarted * perPostTime);
                 nextPostRemain = rateLimitRemain;
-            } else if (inFlight > 0) {
-                currentActiveElapsed = (now - currentPostStartTime) / 1000;
-                totalRemain = (remainingUnstarted * perPostTime) + currentActiveElapsed;
-                nextPostRemain = staggerMs / 1000;
             } else if (nextPostScheduledTime > now) {
                 var staggerRemain = Math.max(0, (nextPostScheduledTime - now) / 1000);
+                nextPostRemain = Math.min(staggerMs / 1000, staggerRemain);
                 totalRemain = staggerRemain + (remainingUnstarted * perPostTime);
-                nextPostRemain = staggerRemain;
             } else {
-                totalRemain = remainingUnstarted * perPostTime;
+                nextPostRemain = staggerMs / 1000;
+                totalRemain = (staggerMs / 1000) + (remainingUnstarted * perPostTime);
             }
         }
         var timeValueStr = '';
@@ -72,12 +69,6 @@
         }
         var nextPostValStr = completed === total ? '已完成' : nextPostRemain.toFixed(1) + ' 秒';
         var totalRemainValStr = completed === total ? '已完成' : totalRemain.toFixed(1) + ' 秒';
-        var currentPostLoadTimeStr = '等待中';
-        if (completed === total && total > 0) {
-            currentPostLoadTimeStr = '已完成';
-        } else if (inFlight > 0) {
-            currentPostLoadTimeStr = currentActiveElapsed.toFixed(1) + ' 秒';
-        }
         var rateLimitAlert = '';
         if (rateLimitRemain > 0) {
             rateLimitAlert = '<div style="color: var(--error); font-weight: bold; margin-top: 8px; font-size: 0.85rem; animation: fallbackPulse 1.5s infinite;">偵測到速率限制，暫停中... 剩餘 ' + rateLimitRemain.toFixed(1) + ' 秒</div>';
@@ -96,10 +87,6 @@
             '<span id="metric-next-remain" class="threads-metric-value">' + nextPostValStr + '</span>' +
             '</div>' +
             '<div class="threads-metric-item">' +
-            '<span class="threads-metric-label">當前貼文載入用時</span>' +
-            '<span id="metric-current-load-time" class="threads-metric-value">' + currentPostLoadTimeStr + '</span>' +
-            '</div>' +
-            '<div class="threads-metric-item">' +
             '<span class="threads-metric-label">預計全部載入時間</span>' +
             '<span id="metric-total-remain" class="threads-metric-value">' + totalRemainValStr + '</span>' +
             '</div>' +
@@ -115,6 +102,7 @@
         pageLoadStartTime = Date.now();
         pageLoadEndTime = 0;
         pageEmbedsCompleted = 0;
+        currentPostStartTime = 0;
         isPageLoadingEmbeds = true;
         createOrUpdateProgressPanel();
         progressIntervalId = setInterval(createOrUpdateProgressPanel, 100);
@@ -337,10 +325,7 @@
         } catch (e) { }
     }
     function withJitter(ms) {
-        try {
-            var jitter = Math.floor(Math.random() * Math.max(0, Math.round(ms * 0.25)));
-            return ms + jitter;
-        } catch (e) { return ms; }
+        return ms;
     }
     function isAllowedPageSize(size) {
         return pageSizeOptions.indexOf(size) !== -1;
@@ -763,6 +748,21 @@
             if (banner && banner.parentNode) banner.parentNode.removeChild(banner);
         } catch (e) { }
     }
+    function triggerEmbed() {
+        try {
+            if (window.instgrm && window.instgrm.Embeds && typeof window.instgrm.Embeds.process === 'function') {
+                window.instgrm.Embeds.process();
+            } else {
+                setTimeout(function () {
+                    try {
+                        if (window.instgrm && window.instgrm.Embeds) window.instgrm.Embeds.process();
+                    } catch (e) { }
+                }, 500);
+            }
+        } catch (e) {
+            console.warn('[錯誤] 呼叫 embed process 失敗:', e);
+        }
+    }
     function processSingleEmbed() {
         if (paused || rateLimitDetected) {
             return;
@@ -780,7 +780,7 @@
         var timeSinceLastRequest = now - lastRequestTime;
         var minDelay = (typeof EMBED_STAGGER_DELAY !== 'undefined') ? Math.max(SAFE_STAGGER_DELAY, EMBED_STAGGER_DELAY) : SAFE_STAGGER_DELAY;
         if (lastRequestTime > 0 && timeSinceLastRequest < minDelay) {
-            setTimeout(pumpEmbeds, withJitter(minDelay - timeSinceLastRequest));
+            setTimeout(pumpEmbeds, minDelay - timeSinceLastRequest);
             return;
         }
         var blockquote = allBlockquotes[currentIndex];
@@ -824,12 +824,13 @@
             if (attemptFinished) return;
             attemptFinished = true;
             cleanupLoadingState();
+            var thisPostDuration = (Date.now() - startTime) / 1000;
             if (success) {
                 blockquote.dataset.embedLoaded = 'true';
                 try { delete blockquote.dataset.embedFailed; } catch (e) { }
                 stats.loaded++;
                 consecutiveErrors = Math.max(0, consecutiveErrors - 1);
-                stats.loadTimes.push((Date.now() - startTime) / 1000);
+                stats.loadTimes.push(thisPostDuration);
                 console.log('[載入] embed 成功 (' + currentIndex + '/' + allBlockquotes.length + ')');
             } else {
                 markBlockquoteFailed(blockquote, reason || 'timeout', true, postItem);
@@ -844,24 +845,9 @@
                 stopProgressTracker();
             }
             if (!paused && !rateLimitDetected) {
-                var delay = withJitter((typeof EMBED_STAGGER_DELAY !== 'undefined') ? Math.max(SAFE_STAGGER_DELAY, EMBED_STAGGER_DELAY) : SAFE_STAGGER_DELAY);
+                var delay = (typeof EMBED_STAGGER_DELAY !== 'undefined') ? Math.max(SAFE_STAGGER_DELAY, EMBED_STAGGER_DELAY) : SAFE_STAGGER_DELAY;
                 nextPostScheduledTime = Date.now() + delay;
                 setTimeout(pumpEmbeds, delay);
-            }
-        }
-        function triggerEmbed() {
-            try {
-                if (window.instgrm && window.instgrm.Embeds && typeof window.instgrm.Embeds.process === 'function') {
-                    window.instgrm.Embeds.process();
-                } else {
-                    setTimeout(function () {
-                        try {
-                            if (window.instgrm && window.instgrm.Embeds) window.instgrm.Embeds.process();
-                        } catch (e) { }
-                    }, 500);
-                }
-            } catch (e) {
-                console.warn('[錯誤] 呼叫 embed process 失敗:', e);
             }
         }
         try {
@@ -902,7 +888,7 @@
         var before = inFlight;
         processSingleEmbed();
         if (inFlight > before && inFlight < EMBED_CONCURRENCY && currentIndex < allBlockquotes.length) {
-            var delay = withJitter((typeof EMBED_STAGGER_DELAY !== 'undefined') ? Math.max(SAFE_STAGGER_DELAY, EMBED_STAGGER_DELAY) : SAFE_STAGGER_DELAY);
+            var delay = (typeof EMBED_STAGGER_DELAY !== 'undefined') ? Math.max(SAFE_STAGGER_DELAY, EMBED_STAGGER_DELAY) : SAFE_STAGGER_DELAY;
             nextPostScheduledTime = Date.now() + delay;
             setTimeout(pumpEmbeds, delay);
         }
@@ -916,7 +902,7 @@
             setTimeout(fn, 16);
         }
     }
-    var SUCCESS_HEIGHT_THRESHOLD = 200;
+    var SUCCESS_HEIGHT_THRESHOLD = 120;
     var FACEBOOK_ERROR_HOSTS = ['facebook.com', 'www.facebook.com', 'fb.com', 'www.fb.com', 'static.xx.fbcdn.net'];
     function isIframeLoadSuccessful(iframeNode) {
         try {
@@ -931,11 +917,6 @@
                     }
                 }
             } catch (e) { }
-            var h = iframeNode.offsetHeight || iframeNode.clientHeight || 0;
-            if (h > 0 && h < SUCCESS_HEIGHT_THRESHOLD) {
-                console.warn('[iframe] 高度過低 (' + h + 'px)，視為未成功渲染');
-                return false;
-            }
             return true;
         } catch (e) {
             return false;
@@ -950,6 +931,7 @@
             function cleanup() {
                 if (timerId) clearTimeout(timerId);
                 if (ro) { try { ro.disconnect(); } catch (e) { } }
+                document.removeEventListener('visibilitychange', onVisibilityChange);
             }
             function finish(ok) {
                 if (resolved) return;
@@ -957,19 +939,36 @@
                 cleanup();
                 resolve(ok);
             }
+            function onVisibilityChange() {
+                if (document.hidden) {
+                    console.log('[iframe] 等待高度期間分頁切入背景，保留 iframe 並視為成功');
+                    finish(true);
+                }
+            }
+            document.addEventListener('visibilitychange', onVisibilityChange);
             var h = iframeNode.offsetHeight || iframeNode.clientHeight || 0;
             if (h >= min) { finish(true); return; }
+            if (document.hidden) {
+                console.log('[iframe] 頁面處於背景模式，略過即時高度檢查，保留 iframe 視為成功');
+                finish(true);
+                return;
+            }
             timerId = setTimeout(function () { finish(false); }, tOut);
             if (window.ResizeObserver) {
                 ro = new ResizeObserver(function () {
                     var h2 = iframeNode.offsetHeight || iframeNode.clientHeight || 0;
-                    if (h2 >= min) finish(true);
+                    if (h2 >= min) {
+                        finish(true);
+                    } else if (document.hidden) {
+                        finish(true);
+                    }
                 });
                 ro.observe(iframeNode);
             } else {
                 var poll = setInterval(function () {
                     var h3 = iframeNode.offsetHeight || iframeNode.clientHeight || 0;
                     if (h3 >= min) { clearInterval(poll); finish(true); }
+                    else if (document.hidden) { clearInterval(poll); finish(true); }
                 }, 300);
                 timerId = setTimeout(function () { clearInterval(poll); finish(false); }, tOut);
             }
@@ -977,12 +976,14 @@
     }
     function loadIframeWithTimeout(blockquote, timeout) {
         return new Promise(function (resolve) {
+            var postItem = blockquote && blockquote.closest ? blockquote.closest('.post-item') : null;
             var timeoutId, observer, earlyTimeoutId;
             var resolved = false;
             function cleanup() {
                 if (timeoutId) clearTimeout(timeoutId);
                 if (earlyTimeoutId) clearTimeout(earlyTimeoutId);
                 if (observer) observer.disconnect();
+                document.removeEventListener('visibilitychange', onVisibilityChange);
             }
             function done(success) {
                 if (resolved) return;
@@ -990,11 +991,42 @@
                 cleanup();
                 resolve(success);
             }
-            timeoutId = setTimeout(function () {
+            var effectiveTimeout = timeout || (typeof IFRAME_TIMEOUT !== 'undefined' ? IFRAME_TIMEOUT : 30000);
+            if (document.hidden) {
+                effectiveTimeout = Math.max(effectiveTimeout, 25000);
+            }
+            function handleTimeout() {
+                if (document.hidden) {
+                    console.warn('[超時] 頁面在背景超時，暫緩判定失敗，等待切回前台確認');
+                    var onFocusOrVisible = function () {
+                        if (!document.hidden) {
+                            document.removeEventListener('visibilitychange', onFocusOrVisible);
+                            setTimeout(function () {
+                                var parentNode = blockquote.parentNode;
+                                if (parentNode && parentNode.querySelector('iframe')) {
+                                    done(true);
+                                } else {
+                                    done(false);
+                                }
+                            }, 5000);
+                        }
+                    };
+                    document.addEventListener('visibilitychange', onFocusOrVisible);
+                    return;
+                }
                 done(false);
-            }, timeout || IFRAME_TIMEOUT);
+            }
+            function onVisibilityChange() {
+                if (document.hidden && timeoutId) {
+                    clearTimeout(timeoutId);
+                    timeoutId = setTimeout(handleTimeout, 25000);
+                }
+            }
+            document.addEventListener('visibilitychange', onVisibilityChange);
+            timeoutId = setTimeout(handleTimeout, effectiveTimeout);
             try {
-                var minTout = (typeof MIN_IFRAME_TIMEOUT !== 'undefined') ? MIN_IFRAME_TIMEOUT : Math.min(10000, (timeout || IFRAME_TIMEOUT));
+                var minTout = (typeof MIN_IFRAME_TIMEOUT !== 'undefined') ? MIN_IFRAME_TIMEOUT : Math.min(10000, effectiveTimeout);
+                if (document.hidden) minTout = Math.max(minTout, 20000);
                 earlyTimeoutId = setTimeout(function () {
                     try {
                         var parentNode = blockquote.parentNode;
@@ -1003,7 +1035,7 @@
                         if (rateLimitDetected || !document.body.contains(blockquote) || blockquote.dataset.embedFailed) {
                             console.warn('[早退] 早期超時或其他條件觸發，暫時放棄等待 iframe (尚未標記為失敗)');
                         } else {
-                            console.warn('[早期警告] 尚未發現 iframe，繼續等待直到主超時 (' + (timeout || IFRAME_TIMEOUT) + 'ms)');
+                            console.warn('[早期警告] 尚未發現 iframe，繼續等待直到主超時 (' + effectiveTimeout + 'ms)');
                         }
                     } catch (e) { }
                 }, minTout);
@@ -1073,20 +1105,21 @@
                                     } catch (e) { }
                                     markDone(false, 'iframe-error');
                                 }, { once: true });
-                                iframeNode.addEventListener('load', function () {
+                                function onIframeLoad() {
                                     var src = iframeNode.getAttribute('src') || iframeNode.src || '';
+                                    if (!src || /^about:/.test(src)) {
+                                        return;
+                                    }
+                                    iframeNode.removeEventListener('load', onIframeLoad);
                                     if (/chrome-error:|chromewebdata/i.test(src)) {
                                         console.warn('[iframe] chrome error page detected: ' + src);
                                         markDone(false, 'xframe-deny');
                                         return;
                                     }
                                     if (!isIframeLoadSuccessful(iframeNode)) {
-                                        var badSrc = iframeNode.getAttribute('src') || iframeNode.src || '';
-                                        if (badSrc && !/^about:/.test(badSrc)) {
-                                            console.warn('[iframe] load 失敗（src 檢查）: ' + badSrc);
-                                            markDone(false, 'iframe-error');
-                                            return;
-                                        }
+                                        console.warn('[iframe] load 失敗（src 檢查）: ' + src);
+                                        markDone(false, 'iframe-error');
+                                        return;
                                     }
                                     waitForIframeHeight(iframeNode, SUCCESS_HEIGHT_THRESHOLD, 12000)
                                         .then(function (heightOk) {
@@ -1097,7 +1130,13 @@
                                                 markDone(true);
                                             }
                                         });
-                                }, { once: true });
+                                }
+                                var curSrc = iframeNode.getAttribute('src') || iframeNode.src || '';
+                                if (curSrc && !/^about:/.test(curSrc) && isIframeLoadSuccessful(iframeNode)) {
+                                    onIframeLoad();
+                                } else {
+                                    iframeNode.addEventListener('load', onIframeLoad);
+                                }
                                 setTimeout(function () {
                                     try {
                                         var src2 = iframeNode.getAttribute('src') || iframeNode.src || '';
@@ -1137,19 +1176,27 @@
                                         try { if (isHostAllowed(found.getAttribute('src') || found.src || '', ALLOWED_THREADS_HOSTS)) handleRateLimit('iframe-error'); } catch (e) { }
                                         markDone(false, 'iframe-error');
                                     }, { once: true });
-                                    found.addEventListener('load', function () {
+                                    function onFoundLoad() {
                                         var fsrc = found.getAttribute('src') || found.src || '';
+                                        if (!fsrc || /^about:/.test(fsrc)) {
+                                            return;
+                                        }
+                                        found.removeEventListener('load', onFoundLoad);
                                         if (/chrome-error:|chromewebdata/i.test(fsrc) || !isIframeLoadSuccessful(found)) {
-                                            if (fsrc && !/^about:/.test(fsrc)) {
-                                                markDone(false, 'iframe-error');
-                                                return;
-                                            }
+                                            markDone(false, 'iframe-error');
+                                            return;
                                         }
                                         waitForIframeHeight(found, SUCCESS_HEIGHT_THRESHOLD, 12000)
                                             .then(function (ok) {
                                                 markDone(ok, ok ? null : 'iframe-error');
                                             });
-                                    }, { once: true });
+                                    }
+                                    var curFsrc = found.getAttribute('src') || found.src || '';
+                                    if (curFsrc && !/^about:/.test(curFsrc) && isIframeLoadSuccessful(found)) {
+                                        onFoundLoad();
+                                    } else {
+                                        found.addEventListener('load', onFoundLoad);
+                                    }
                                 }
                             }
                         } catch (e) { }
@@ -1476,6 +1523,7 @@
             rateLimitDetected = false;
             consecutiveErrors = 0;
             lastRequestTime = 0;
+            currentPostStartTime = 0;
             loadedCount = 0;
             stats = { total: 0, loaded: 0, failed: 0, rateLimitHits: 0, startTime: Date.now(), loadTimes: [] };
             try { hideRateLimitBanner(); } catch (e) { }
@@ -1687,7 +1735,7 @@
                 return;
             }
             appendPostsInChunks(getPagePosts(currentPage), function () {
-                requestAnimationFrame(function () {
+                (document.hidden ? function (cb) { setTimeout(cb, 16); } : requestAnimationFrame)(function () {
                     var blockquotes = container.querySelectorAll('blockquote.text-post-media');
                     allBlockquotes = Array.prototype.slice.call(blockquotes);
                     allBlockquotes.forEach(function (bq) {
@@ -1781,7 +1829,7 @@
                     backBanner.appendChild(backLink);
                     backBanner.appendChild(backLabel);
                     container.insertBefore(backBanner, singleItem);
-                    requestAnimationFrame(function () {
+                    (document.hidden ? function (cb) { setTimeout(cb, 16); } : requestAnimationFrame)(function () {
                         var bq = container.querySelector('blockquote.text-post-media');
                         if (bq) {
                             allBlockquotes = [bq];
@@ -1901,5 +1949,35 @@
                 });
             });
         })();
+        window.addEventListener('message', function (e) {
+            try {
+                var data = e.data;
+                if (typeof data === 'string' && data.indexOf('{') === 0) {
+                    try { data = JSON.parse(data); } catch (err) { }
+                }
+                if (data && (data.type === 'MEASURE' || data.type === 'HEIGHT') && data.details && data.details.height) {
+                    var iframes = document.querySelectorAll('.post-item iframe');
+                    for (var i = 0; i < iframes.length; i++) {
+                        if (iframes[i].contentWindow === e.source) {
+                            iframes[i].style.height = data.details.height + 'px';
+                            break;
+                        }
+                    }
+                }
+            } catch (err) { }
+        });
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden) {
+                console.log('[可見性] 分頁切換回前台，觸發檢查與推進');
+                triggerEmbed();
+                try {
+                    window.dispatchEvent(new Event('resize'));
+                } catch (e) { }
+                if (!paused && !rateLimitDetected && inFlight < EMBED_CONCURRENCY && currentIndex < allBlockquotes.length) {
+                    pumpEmbeds();
+                }
+                createOrUpdateProgressPanel();
+            }
+        });
     }
 })();

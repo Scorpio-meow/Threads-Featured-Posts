@@ -216,6 +216,7 @@ body {
 .post-item iframe {
     max-width: 100% !important;
     width: 100% !important;
+    min-height: 280px;
     display: block !important;
     border-radius: var(--radius-lg);
 }
@@ -1030,6 +1031,7 @@ button {
     display: block !important;
     width: 100% !important;
     max-width: 100% !important;
+    min-height: 280px;
     border-radius: 22px;
 }
 

@@ -39,7 +39,7 @@ and Progressive Web App (PWA) offline caching for a seamless browsing and search
   - [5. Chunked Non-Blocking Rendering & Shimmer Skeletons](#5-chunked-non-blocking-rendering--shimmer-skeletons)
   - [6. Deterministic Seeded Random Shuffling](#6-deterministic-seeded-random-shuffling)
   - [7. PWA Support & 32-bit djb2 Content Hash Caching](#7-pwa-support--32-bit-djb2-content-hash-caching)
-  - [8. Iframe Health Observer & Graceful Fallback](#8-iframe-health-observer--graceful-fallback)
+  - [8. Iframe Health Observer, Background Tab Adaptation & Graceful Fallback](#8-iframe-health-observer-background-tab-adaptation--graceful-fallback)
   - [9. Single Post Isolated Preview Mode](#9-single-post-isolated-preview-mode)
   - [10. Glassmorphism Loading Progress Panel](#10-glassmorphism-loading-progress-panel)
   - [11. Global Console Noise Filter](#11-global-console-noise-filter)
@@ -78,9 +78,9 @@ Official Threads embed iframes provide rich social interactivity. However, when 
 
 | Core Value | Description |
 | :--- | :--- |
-| **Resilient Rate-Limit Defense** | Automatically catches HTTP 429 errors, pauses the loading queue with an exponential backoff countdown, and resumes automatically without page reloads. |
-| **Graceful Degradation Guarantee** | Seamlessly substitutes broken or blocked iframes (height under 200px) with fallback author cards and direct links. |
-| **Smooth Chunked Rendering** | Leverages `requestIdleCallback` and shimmer skeleton animations to ensure non-blocking DOM mounting, maintaining optimal INP metrics. |
+| **Rate-Limit Resilience** | Intercepts HTTP 429 errors globally, applying exponential backoff and automated queue resumption. |
+| **Graceful Degradation Guarantee** | Seamlessly substitutes broken or blocked iframes (height under 120px) with fallback author cards and direct links. |
+| **Smooth Chunked Rendering** | Leverages `requestIdleCallback` and shimmer skeleton screens to mount posts progressively, optimizing INP. |
 | **Instant Search & Tag Filtering** | Fast real-time fuzzy search matching authors, content, and hashtags with two-way URL query synchronization. |
 | **Offline Cache & PWA** | Automated version invalidation via 32-bit djb2 content hashing, supporting full standalone app installation on desktop and mobile. |
 
@@ -200,16 +200,24 @@ python -m http.server 3000
 - **Progressive Web App**: Complete with `manifest.json` and Service Worker for desktop and mobile home screen installation.
 - **Automatic djb2 Cache Invalidation**: The Service Worker reads core source files and hashes their content using a 32-bit djb2 algorithm, automatically clearing stale caches when code changes.
 
-### 8. Iframe Health Observer & Graceful Fallback
-- **MutationObserver + ResizeObserver**: Monitors iframe generation and rendered height.
-- **Automated Fallback**: If an iframe fails to render, times out (exceeding `IFRAME_TIMEOUT`), or stays under 200px in height, it is replaced with a fallback card containing author info and a direct Threads link.
+### 8. Iframe Health Observer, Background Tab Adaptation & Graceful Fallback
+- **MutationObserver + ResizeObserver Dual Monitoring**: Real-time tracking of dynamically generated iframe node insertion and rendered height.
+- **Background Tab Adaptation & Anti-Collapse Defense**:
+  - Global CSS enforces `.post-item iframe { min-height: 280px; }` to eliminate layout collapse into thin bars when the browser pauses background rendering.
+  - Ignores initial `about:blank` load events, ensuring validation only executes once the genuine Threads URL (`threads.com`/`threads.net`) has loaded.
+  - Automatically extends timeout to >= 25s when the tab is hidden (`document.hidden`); immediately triggers a `window.resize` broadcast and re-measurement upon returning to the foreground (`visibilitychange`).
+  - Global `window.addEventListener('message', ...)` listener captures `MEASURE` height messages dispatched from Threads embed iframes and synchronizes style heights dynamically.
+- **Automated Fallback Replacement**: If an iframe fails to render, times out (exceeding `IFRAME_TIMEOUT`), is rejected by `X-Frame-Options`, or stays under 120px in height, it is replaced with a graceful fallback card featuring author info and a direct Threads link.
 
 ### 9. Single Post Isolated Preview Mode
 - **Direct URL Parameter Routing**: Navigate via `?post=<URL>` or `?post=<Index>` to isolate an individual post while hiding header controls, tag bars, and pagination.
 - **One-Click Share URL**: Built-in button to copy the direct sharing link.
 
 ### 10. Glassmorphism Loading Progress Panel
-- **Telemetry Metrics**: Shows overall page load percentage, current post duration, next post countdown, and estimated total remaining duration.
+- **Telemetry Metrics**: Real-time display of page load percentage and 3 essential time metrics:
+  1. **Next Post Countdown**: Uniformly fixed at a 3.6s countdown (except during Meta rate-limit cooldown where a 60s timer is shown).
+  2. **Estimated Total Duration**: Smoothly estimated based on remaining unstarted posts and average load time.
+  3. **Total Load Elapsed Time**: Dynamic ticking during progress, locking the final duration upon 100% completion.
 - **Glassmorphism Aesthetic**: Modern frosted glass backdrop that remains visually unobtrusive.
 
 ### 11. Global Console Noise Filter
@@ -318,13 +326,13 @@ sequenceDiagram
 
     UI->>TL: Initialize page (calculate page from URL query)
     TL->>UI: Render Skeleton Shimmer Placeholders
-    TL->>TL: Initialize Progress Tracker Panel
+    TL->>UI: Initialize Progress Tracker Panel
 
     loop Staggered Queue Loading (BATCH_SIZE = 1)
         TL->>UI: Mount blockquote embed node
         TL->>API: Dynamic load /embed.js to process iframe
         alt Load Succeeded
-            API-->>UI: iframe rendered (height > 200px)
+            API-->>UI: iframe rendered (height > 120px)
             TL->>UI: Update progress bar & completion timer
         else HTTP 429 Encountered
             API-->>CF: Trigger 429 Too Many Requests
@@ -332,7 +340,7 @@ sequenceDiagram
             TL->>UI: Display countdown banner & pause queue
             Note over TL,UI: Exponential backoff delay (default 60s x 1.5)
             TL->>TL: Backoff elapsed, resume queue
-        else Timeout / Height Block (< 200px)
+        else Timeout / Height Block (< 120px)
             TL->>UI: Graceful fallback to direct link card
         end
     end
@@ -351,7 +359,7 @@ Customizable constants in [config.js](./config.js):
 | :--- | :---: | :---: | :--- |
 | `LOAD_DELAY` | number | `4000` | Base load delay between embed requests (ms). Maintain >= 4000ms. |
 | `BATCH_SIZE` | number | `1` | Maximum concurrent iframe loads. Keep at 1 to prevent 429 rate limits. |
-| `EMBED_STAGGER_DELAY` | number | `3600` | Stagger interval between adjacent embed loads (ms). Safety threshold: 3600ms. |
+| `EMBED_STAGGER_DELAY` | number | `3600` | Stagger interval between adjacent embed loads (ms). Fixed at 3600ms (3.6s). |
 | `IFRAME_TIMEOUT` | number | `3600` | Timeout threshold for individual iframe renders (ms). Triggers fallback on expiry. |
 | `MIN_IFRAME_TIMEOUT` | number | `8000` | Initial presence check safety duration (ms). |
 | `RATE_LIMIT_BACKOFF` | number | `60000` | Base backoff on 429 error (ms). Escalates by 1.5x up to 300s ceiling. |
@@ -462,8 +470,8 @@ function shuffleArrayWithSeed(array, seed) {
 
 To handle blocked iframes without breaking page layouts:
 
-1. **MutationObserver** traps iframe creation inside embed wrappers.
-2. **ResizeObserver** monitors rendered height; if height remains under 200px upon timeout, it is swapped for a graceful fallback card.
+1. **MutationObserver** detects iframe DOM element creation.
+2. **ResizeObserver** monitors rendered height; if height remains under 120px upon timeout, it is swapped for a graceful fallback card.
 
 ---
 

@@ -9,7 +9,7 @@
 ## Core Files & Directory Structure
 - index.html: Primary semantic HTML structure containing search inputs, dark/light theme toggles, hashtag container, masonry/list layout wrappers, pagination controls, loading progress panel, and FAQ diagnostic modal.
 - config.js: Post data repository (posts array) and runtime rate-limiting/rendering configuration constants (LOAD_DELAY, BATCH_SIZE, EMBED_STAGGER_DELAY, etc.).
-- threads-loader.js: Primary runtime controller managing pagination calculation, queue scheduling, rate-limit backoff handling, iframe lifecycle monitoring, DOM shimmer skeleton rendering, tag frequency statistics, real-time search filtering, and progress metrics telemetry.
+- threads-loader.js: Primary runtime controller managing pagination calculation, queue scheduling, rate-limit backoff handling, iframe lifecycle & background tab visibility monitoring, DOM shimmer skeleton rendering, tag frequency statistics, real-time search filtering, and progress metrics telemetry.
 - console-filter.js: Global error and warning interceptor that suppresses Threads embed script cross-origin 404 noise and dispatches threads:rate-limit custom events upon detecting HTTP 429 status.
 - styles.css: Design token system with CSS custom properties, Light/Dark theme styles, native CSS columns masonry layout, skeleton shimmer animations, and glassmorphism UI components.
 - sw.js: Progressive Web App (PWA) Service Worker implementing 32-bit djb2 content hashing across core files for automated cache invalidation and offline asset serving.
@@ -49,7 +49,7 @@ interface RuntimeConfig {
   /** Maximum concurrent iframe loads limit (default: 1 for rate-limit safety) */
   BATCH_SIZE: number;
 
-  /** Stagger delay between adjacent post requests in ms (default: 3600) */
+  /** Stagger delay between adjacent post requests in ms (default: 3600, unified 3.6s interval) */
   EMBED_STAGGER_DELAY: number;
 
   /** Individual iframe render timeout threshold in ms (default: 3600) */
@@ -119,9 +119,10 @@ interface URLParams {
 - Shuffling generates a timestamp seed preserved in URL `?random=<seed>`.
 - A linear congruential generator uses this seed to guarantee identical post sorting order during pagination and page refresh.
 
-### 4. Iframe Health Observers & Graceful Fallback
-- Uses `MutationObserver` to watch iframe insertion and `ResizeObserver` to monitor rendered height.
-- If an iframe fails to render, times out, or stays under 200px height (indicating block/error), it is gracefully replaced with a fallback card containing author info and direct Threads link.
+### 4. Iframe Health Observers, Background Tab Adaptation & Graceful Fallback
+- Uses `MutationObserver` to watch iframe insertion, filtering out initial empty `about:blank` events until the real Threads URL loads.
+- Background tab adaptation (`document.hidden`): relaxes timeout to 25s+, applies `min-height: 280px` CSS fallback, listens to `window.addEventListener('message', ...)` for cross-origin `MEASURE` dimensions, and broadcasts `resize` events upon `visibilitychange` to trigger immediate recalculations.
+- Uses `ResizeObserver` to monitor rendered height. If an iframe fails to render, times out, or stays under 120px height (indicating block/error), it is gracefully replaced with a fallback card containing author info and direct Threads link.
 
 ### 5. 32-bit djb2 Dynamic Service Worker Cache Invalidation
 - `sw.js` reads source code of core files (index.html, styles.css, threads-loader.js, config.js, console-filter.js, manifest.json), computes a unified 32-bit djb2 hash, and creates versioned caches automatically.
@@ -142,7 +143,7 @@ interface URLParams {
 
 ## Known Constraints & Troubleshooting
 - Threads Embed Authentication: Official Threads embed iframes require the user's browser to be logged into Threads and "Do Not Track" to be disabled; otherwise fallback links are displayed.
-- Rate Limiting Defense: Maintain BATCH_SIZE = 1 and EMBED_STAGGER_DELAY >= 3600 in config.js to ensure long-term uninterrupted embed rendering.
+- Rate Limiting Defense: Maintain BATCH_SIZE = 1 and EMBED_STAGGER_DELAY = 3600 (unified 3.6s interval between posts) in config.js to ensure long-term uninterrupted embed rendering.
 - Diagnostic Mode: Append `?debug=1` to the URL to view unmasked console errors and timing telemetry.
 
 ## License
