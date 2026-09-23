@@ -203,10 +203,10 @@ python -m http.server 3000
 ### 8. Iframe Health Observer, Background Tab Adaptation & Graceful Fallback
 - **MutationObserver + ResizeObserver Dual Monitoring**: Real-time tracking of dynamically generated iframe node insertion and rendered height.
 - **Background Tab Adaptation & Anti-Collapse Defense**:
-  - Global CSS enforces `.post-item iframe { min-height: 280px; }` to eliminate layout collapse into thin bars when the browser pauses background rendering.
+  - Global CSS sets `.post-item iframe { min-height: 280px; }` as a placeholder until the real height arrives (Threads `embed.js` creates each iframe at `height: 0`), eliminating layout collapse into thin bars when the browser pauses background rendering.
   - Ignores initial `about:blank` load events, ensuring validation only executes once the genuine Threads URL (`threads.com`/`threads.net`) has loaded.
   - Automatically extends timeout to >= 25s when the tab is hidden (`document.hidden`); immediately triggers a `window.resize` broadcast and re-measurement upon returning to the foreground (`visibilitychange`).
-  - Global `window.addEventListener('message', ...)` listener captures `MEASURE` height messages dispatched from Threads embed iframes and synchronizes style heights dynamically.
+  - Global `window.addEventListener('message', ...)` listener receives the content height Threads embed iframes post as a plain number (accepted only from `threads.com`/`threads.net` origins; legacy `MEASURE`/`HEIGHT` objects also supported) and pins both the iframe's `height` and `min-height` to it so cards hug their content; reports of 0 are skipped to prevent collapse.
 - **Automated Fallback Replacement**: If an iframe fails to render, times out (exceeding `IFRAME_TIMEOUT`), is rejected by `X-Frame-Options`, or stays under 120px in height, it is replaced with a graceful fallback card featuring author info and a direct Threads link.
 
 ### 9. Single Post Isolated Preview Mode
@@ -551,6 +551,7 @@ Follows the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
 #### Fixed
 - Removed forced minimum height constraints for embedded posts on mobile viewports for cleaner presentation.
 - Fixed abnormal bottom whitespace margin in single post isolated preview mode.
+- Fixed large blank space below embeds shorter than 280px (e.g. the "Cannot display thread" notice, short text posts): the `postMessage` listener now accepts the plain numeric height Threads actually sends and pins the iframe's `min-height` to it.
 
 #### Security
 - Resolved CodeQL static analysis alerts for DOM XSS by sanitizing dynamic text nodes and using safe property assignments.

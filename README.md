@@ -203,10 +203,10 @@ python -m http.server 3000
 ### 8. Iframe 存活監控、背景分頁適配與優雅降級
 - **MutationObserver + ResizeObserver 雙重監控**：即時監控動態生成的 iframe 節點狀態與高度變化。
 - **背景分頁載入適配與防塌陷機制**：
-  - CSS 全域設定 `.post-item iframe { min-height: 280px; }`，徹底防止瀏覽器在背景凍結佈局時卡片塌陷成細條。
+  - CSS 全域設定 `.post-item iframe { min-height: 280px; }` 作為取得實際高度前的占位高度（Threads `embed.js` 建立 iframe 時高度為 0），防止瀏覽器在背景凍結佈局時卡片塌陷成細條。
   - 自動過濾初始空白 `about:blank` 載入事件，確保僅在真實 Threads 貼文網址（`threads.com`/`threads.net`）加載後才進行驗證。
   - 背景模式（`document.hidden`）下自動延長超時判定至 25 秒以上；分頁切回前台（`visibilitychange`）時即時觸發 `window.resize` 廣播與尺寸重新測量。
-  - 全域註冊 `postMessage` 訊息監聽器，主動捕捉 Threads iframe 回傳之 `MEASURE` 尺寸數據並動態同步高度。
+  - 全域註冊 `postMessage` 訊息監聽器，接收 Threads iframe 以純數字回傳的內容高度（僅接受 `threads.com`/`threads.net` 來源，亦相容 `MEASURE`/`HEIGHT` 物件格式），將 iframe 的 `height` 與 `min-height` 同步為該高度，讓卡片貼合內容；回報值為 0 時略過，避免塌陷。
 - **自動降級替換**：若 iframe 載入超時（超過 `IFRAME_TIMEOUT`）、遭遇 `X-Frame-Options` 拒絕或高度低於 120px（官方阻擋狀態），系統會自動將其替換為備用卡片，顯示發文作者與「在 Threads 查看此貼文」直達按鈕。
 
 ### 9. 單篇貼文隔離預覽模式
@@ -553,6 +553,7 @@ cd Threads-Featured-Posts
 #### 修正
 - 移除手機版貼文嵌入的強制最小高度限制，使行動裝置閱讀體驗更緊湊貼合。
 - 修正單篇隔離預覽模式下頁面底部留白異常的問題。
+- 修正內容高度不足 280px 的嵌入（如「無法顯示串文」、短文字貼文）下方出現大白底邊的問題：`postMessage` 監聽器改為接收 Threads 實際傳送的純數字高度，並將 iframe 的 `min-height` 同步為該高度。
 
 #### 安全性
 - 全面修復 CodeQL 靜態分析指出的 DOM XSS 潛在風險，所有動態文字節點與屬性全數改為安全賦值。

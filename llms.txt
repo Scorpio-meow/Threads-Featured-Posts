@@ -121,7 +121,11 @@ interface URLParams {
 
 ### 4. Iframe Health Observers, Background Tab Adaptation & Graceful Fallback
 - Uses `MutationObserver` to watch iframe insertion, filtering out initial empty `about:blank` events until the real Threads URL loads.
-- Background tab adaptation (`document.hidden`): relaxes timeout to 25s+, applies `min-height: 280px` CSS fallback, listens to `window.addEventListener('message', ...)` for cross-origin `MEASURE` dimensions, and broadcasts `resize` events upon `visibilitychange` to trigger immediate recalculations.
+- Background tab adaptation (`document.hidden`): relaxes timeout to 25s+ and broadcasts `resize` events upon `visibilitychange` to trigger immediate recalculations.
+- Height sync (placeholder → reported height):
+  - Threads `embed.js` inserts each iframe at `height: 0`; the embedded page then posts its content height to the parent as a plain number of pixels from `https://www.threads.com`, not a `MEASURE` object. An iframe still at 0 height reports `0`.
+  - `.post-item iframe { min-height: 280px; }` in styles.css is the placeholder until the first positive report, keeping cards from collapsing.
+  - The `window` `message` listener in threads-loader.js accepts numeric reports from `ALLOWED_THREADS_HOSTS` origins (legacy `{ type: 'MEASURE' | 'HEIGHT', details: { height } }` objects too), skips `0`, and pins both `style.height` and `style.minHeight` to the reported value, so embeds shorter than 280px (e.g. the "Cannot display thread" notice, short text posts) end flush with their content.
 - Uses `ResizeObserver` to monitor rendered height. If an iframe fails to render, times out, or stays under 120px height (indicating block/error), it is gracefully replaced with a fallback card containing author info and direct Threads link.
 
 ### 5. 32-bit djb2 Dynamic Service Worker Cache Invalidation
