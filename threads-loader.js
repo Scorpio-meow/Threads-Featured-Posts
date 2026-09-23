@@ -1955,11 +1955,18 @@
                 if (typeof data === 'string' && data.indexOf('{') === 0) {
                     try { data = JSON.parse(data); } catch (err) { }
                 }
-                if (data && (data.type === 'MEASURE' || data.type === 'HEIGHT') && data.details && data.details.height) {
+                var reportedHeight;
+                if (typeof data === 'number' && isHostAllowed(e.origin, ALLOWED_THREADS_HOSTS)) {
+                    reportedHeight = data;
+                } else if (data && (data.type === 'MEASURE' || data.type === 'HEIGHT') && data.details) {
+                    reportedHeight = data.details.height;
+                }
+                if (reportedHeight > 0) {
                     var iframes = document.querySelectorAll('.post-item iframe');
                     for (var i = 0; i < iframes.length; i++) {
                         if (iframes[i].contentWindow === e.source) {
-                            iframes[i].style.height = data.details.height + 'px';
+                            iframes[i].style.height = reportedHeight + 'px';
+                            iframes[i].style.minHeight = reportedHeight + 'px';
                             break;
                         }
                     }
